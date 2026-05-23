@@ -12,8 +12,16 @@ jobs:
     steps:
       - name: Install Cloudflare Client
         run: |
-          curl -L --output cloudflared.deb https://github.com
-          sudo dpkg -i cloudflared.deb
+          # 1. Unduh dan pasang kunci repositori resmi Cloudflare
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL https://cloudflare.com | sudo tee /etc/apt/keyrings/cloudflare-main.gpg > /dev/null
+
+          # 2. Tambahkan repositori Cloudflare ke daftar sistem
+          echo "deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg] https://cloudflare.com stable main" | sudo tee /etc/apt/sources.list.distrib.d/cloudflare.list || echo "deb [signed-by=/etc/apt/keyrings/cloudflare-main.gpg] https://cloudflare.com stable main" | sudo tee /etc/apt/sources.list.d/cloudflare.list
+
+          # 3. Perbarui paket dan pasang cloudflared secara native
+          sudo apt-get update && sudo apt-get install -y cloudflared
+
       - name: Eksekusi Perintah di Jetson via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
