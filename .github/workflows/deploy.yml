@@ -28,15 +28,23 @@ jobs:
           # 4. Tes apakah cloudflared sudah aktif
           cloudflared --version
 
-      - name: Eksekusi Perintah di Jetson via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          port: ${{ secrets.SSH_PORT }}
-          username: ${{ secrets.SSH_USERNAME }}
-          password: ${{ secrets.SSH_PASSWORD }}
-          proxy_command: cloudflared access ssh --id ${{ secrets.CF_CLIENT_ID }} --secret ${{ secrets.CF_CLIENT_SECRET }} --target %h:%p
-          script: |
-            cd /home/sugara-jetson/miniatur-cloud
-            git pull origin main
-            echo "--- DEPLOY BERHASIL ---"
+      - name: Eksekusi Perintah di Jetson via SSH + Cloudflare Access
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_USERNAME: ${{ secrets.SSH_USERNAME }}
+          SSH_PASSWORD: ${{ secrets.SSH_PASSWORD }}
+          CF_CLIENT_ID: ${{ secrets.CF_CLIENT_ID }}
+          CF_CLIENT_SECRET: ${{ secrets.CF_CLIENT_SECRET }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y sshpass
+          PROXY_CMD="cloudflared access ssh --hostname %h --id ${CF_CLIENT_ID} --secret ${CF_CLIENT_SECRET}"
+          sshpass -p "${SSH_PASSWORD}" ssh \
+            -o StrictHostKeyChecking=no \
+            -o UserKnownHostsFile=/dev/null \
+            -o "ProxyCommand=${PROXY_CMD}" \
+            -p "${SSH_PORT}" \
+            "${SSH_USERNAME}@${SSH_HOST}" \
+            "cd /home/sugara-jetson/miniatur-cloud && git pull origin main && echo '--- DEPLOY BERHASIL ---'"
