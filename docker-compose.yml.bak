@@ -1,0 +1,114 @@
+version: '3.8'
+
+networks:
+  cloud-net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  minio-data:
+  postgres-data:
+  redis-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+
+services:
+
+  minio:
+    image: minio/minio:latest
+    container_name: cloud-storage
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: CloudPass2024!
+    command: server /data --console-address ":9001"
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: cloud-db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: clouduser
+      POSTGRES_PASSWORD: CloudPass2024!
+      POSTGRES_DB: clouddb
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: cloud-cache
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: cloud-metrics
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: cloud-dashboard
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    networks:
+      - cloud-net
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: cloud-logs
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: cloud-gateway
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - cloud-net
+    depends_on:
+      - minio
+      - grafana
+    restart: unless-stopped
+
