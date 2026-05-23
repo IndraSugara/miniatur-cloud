@@ -1,0 +1,23 @@
+name: CI/CD Jetson Nano via Tunnel SSH
+
+on:
+  push:
+    branches:
+      - main # Trigger jalan setiap kali Anda push ke branch main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest # Menggunakan server cloud GitHub untuk memerintah
+
+    steps:
+      - name: Eksekusi Perintah di Jetson via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USERNAME }}
+          password: ${{ secrets.SSH_PASSWORD }}
+          script: |
+            cd /home/sugara-jetson/miniatur-cloud
+            git pull origin main
+            echo "--- DEPLOY BERHASIL ---"
