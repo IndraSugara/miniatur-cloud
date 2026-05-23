@@ -35,7 +35,7 @@ def get_db():
     finally:
         db.close()
 
-# ── Authentication ──────────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────────
 pwd_ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2  = OAuth2PasswordBearer(tokenUrl="/auth/token")
 
