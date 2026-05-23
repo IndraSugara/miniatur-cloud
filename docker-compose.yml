@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 networks:
   cloud-net:
@@ -16,7 +16,6 @@ volumes:
   loki-data:
 
 services:
-
   minio:
     image: minio/minio:latest
     container_name: cloud-storage
@@ -105,6 +104,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./html:/usr/share/nginx/html:ro
     networks:
       - cloud-net
     depends_on:
