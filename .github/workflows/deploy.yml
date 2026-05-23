@@ -12,8 +12,8 @@ jobs:
     steps:
       - name: Install Cloudflare Client
         run: |
-          wget -q https://github.com
-          sudo dpkg -i cloudflared-linux-amd64.deb
+          curl -L --output cloudflared.deb https://github.com
+          sudo dpkg -i cloudflared.deb
       - name: Eksekusi Perintah di Jetson via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
