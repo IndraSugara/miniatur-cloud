@@ -12,11 +12,20 @@ jobs:
     steps:
       - name: Install Cloudflare Client
         run: |
-          # 1. Unduh file biner cloudflared langsung
-          sudo curl -L https://github.com -o /usr/local/bin/cloudflared
-          # 2. Berikan izin akses eksekusi ke sistem
-          sudo chmod +x /usr/local/bin/cloudflared
-          # 3. Tes apakah cloudflared sudah aktif
+          set -euo pipefail
+          # 1. Unduh file biner cloudflared resmi (Linux amd64)
+          curl -fsSL --retry 3 --retry-delay 2 \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o /tmp/cloudflared
+          # 2. Validasi singkat agar tidak salah unduh halaman HTML
+          if head -c 32 /tmp/cloudflared | grep -qi "<!doctype html>"; then
+            echo "Gagal: file yang terunduh adalah HTML, bukan biner cloudflared."
+            exit 1
+          fi
+          # 3. Install ke PATH dan beri izin eksekusi
+          sudo install -m 0755 /tmp/cloudflared /usr/local/bin/cloudflared
+          rm -f /tmp/cloudflared
+          # 4. Tes apakah cloudflared sudah aktif
           cloudflared --version
 
       - name: Eksekusi Perintah di Jetson via SSH
