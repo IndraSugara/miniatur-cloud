@@ -4,8 +4,19 @@ import { clampPercent } from "../utils.js";
 export const monitoringView = {
   id: "monitoring",
   title: "Monitoring",
-  subtitle: "Pantau resource host secara realtime dan akses Grafana/Prometheus.",
-  async mount(root, { apis }) {
+  subtitle: "Pantau resource host dan akses observability stack (admin).",
+  async mount(root, { apis, state }) {
+    if (!state.user?.is_admin) {
+      root.innerHTML = `
+        <section class="panel">
+          <h3>Monitoring Infra</h3>
+          <p class="message error">Akses monitoring host hanya untuk admin.</p>
+          <p class="dim">User biasa hanya bisa memantau status instance miliknya di halaman Compute.</p>
+        </section>
+      `;
+      return () => {};
+    }
+
     root.innerHTML = `
       <section class="panel">
         <div class="toolbar">

@@ -1500,17 +1500,39 @@ def presign_download(bucket: str, body: PresignRequest,
 # MONITORING
 # ════════════════════════════════════════════════════════════
 @app.get("/monitoring/host", tags=["Monitoring"])
-def host_metrics(user: User = Depends(get_current_user)):
+def host_metrics(admin: User = Depends(require_admin)):
     return get_engine().get_host_info()
 
 @app.get("/monitoring/summary", tags=["Monitoring"])
 def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    running   = db.query(Instance).filter(Instance.status == "running").count()
-    stopped   = db.query(Instance).filter(Instance.status == "stopped").count()
-    total     = db.query(Instance).count()
-    users     = db.query(User).count()
-    return {"instances": {"running": running, "stopped": stopped, "total": total},
-            "users": users}
+    if user.is_admin:
+        running = db.query(Instance).filter(Instance.status == "running").count()
+        stopped = db.query(Instance).filter(Instance.status == "stopped").count()
+        total = db.query(Instance).count()
+        users = db.query(User).count()
+        return {
+            "scope": "global",
+            "instances": {"running": running, "stopped": stopped, "total": total},
+            "users": users,
+        }
+
+    running = db.query(Instance).filter(
+        Instance.owner_id == user.id,
+        Instance.status == "running",
+    ).count()
+    stopped = db.query(Instance).filter(
+        Instance.owner_id == user.id,
+        Instance.status == "stopped",
+    ).count()
+    total = db.query(Instance).filter(
+        Instance.owner_id == user.id,
+        Instance.status.in_(["pending", "running", "stopped", "error"]),
+    ).count()
+    return {
+        "scope": "self",
+        "instances": {"running": running, "stopped": stopped, "total": total},
+        "users": None,
+    }
 
 # ════════════════════════════════════════════════════════════
 # CATALOG & HEALTH

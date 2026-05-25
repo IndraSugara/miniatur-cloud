@@ -4,8 +4,8 @@ import { clampPercent, escapeHtml, statusClass, toLocalDate } from "../utils.js"
 export const dashboardView = {
   id: "dashboard",
   title: "Dashboard",
-  subtitle: "Ringkasan host, instance, dan status layanan.",
-  async mount(root, { apis, navigate }) {
+  subtitle: "Ringkasan instance dan status layanan.",
+  async mount(root, { apis, navigate, state }) {
     root.innerHTML = `
       <div class="grid grid-3">
         <div class="metric">
@@ -83,33 +83,47 @@ export const dashboardView = {
     const pDisk = root.querySelector("#p-disk");
 
     async function load() {
-      const [host, summary, health, instancesPayload] = await Promise.all([
-        apis.monitor.host(),
+      const [summary, health, instancesPayload, host] = await Promise.all([
         apis.monitor.summary(),
         apis.monitor.health(),
         apis.compute.listInstances(),
+        state.user?.is_admin ? apis.monitor.host() : Promise.resolve(null),
       ]);
 
-      const cpu = Number(host.cpu_percent || 0);
-      const mem = Number(host.memory_percent || 0);
-      const disk = Number(host.disk_percent || 0);
-
-      cpuEl.textContent = `${cpu.toFixed(1)}%`;
-      memEl.textContent = `${mem.toFixed(1)}%`;
-      diskEl.textContent = `${disk.toFixed(1)}%`;
-      memSubEl.textContent = `${host.memory_used_gb} / ${host.memory_total_gb} GB`;
-      diskSubEl.textContent = `${host.disk_used_gb} / ${host.disk_total_gb} GB`;
-
-      pCpu.style.width = `${clampPercent(cpu)}%`;
-      pMem.style.width = `${clampPercent(mem)}%`;
-      pDisk.style.width = `${clampPercent(disk)}%`;
+      if (host) {
+        const cpu = Number(host.cpu_percent || 0);
+        const mem = Number(host.memory_percent || 0);
+        const disk = Number(host.disk_percent || 0);
+        cpuEl.textContent = `${cpu.toFixed(1)}%`;
+        memEl.textContent = `${mem.toFixed(1)}%`;
+        diskEl.textContent = `${disk.toFixed(1)}%`;
+        memSubEl.textContent = `${host.memory_used_gb} / ${host.memory_total_gb} GB`;
+        diskSubEl.textContent = `${host.disk_used_gb} / ${host.disk_total_gb} GB`;
+        pCpu.style.width = `${clampPercent(cpu)}%`;
+        pMem.style.width = `${clampPercent(mem)}%`;
+        pDisk.style.width = `${clampPercent(disk)}%`;
+      } else {
+        cpuEl.textContent = "Restricted";
+        memEl.textContent = "Restricted";
+        diskEl.textContent = "Restricted";
+        memSubEl.textContent = "Host metrics admin-only";
+        diskSubEl.textContent = "Host metrics admin-only";
+        pCpu.style.width = "0%";
+        pMem.style.width = "0%";
+        pDisk.style.width = "0%";
+      }
 
       summaryEl.innerHTML = `
         <div class="grid">
+          <div>Scope: <strong>${summary.scope || "self"}</strong></div>
           <div>Running: <strong>${summary.instances.running}</strong></div>
           <div>Stopped: <strong>${summary.instances.stopped}</strong></div>
           <div>Total Instances: <strong>${summary.instances.total}</strong></div>
-          <div>Total Users: <strong>${summary.users}</strong></div>
+          ${
+            summary.users != null
+              ? `<div>Total Users: <strong>${summary.users}</strong></div>`
+              : `<div class="dim">User count only visible to admin.</div>`
+          }
         </div>
       `;
 

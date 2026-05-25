@@ -90,6 +90,11 @@ async function bootstrapApp() {
   if (adminNav) {
     adminNav.classList.toggle("hidden", !me.is_admin);
   }
+  const monitoringNav = elements.navItems.find((item) => item.dataset.view === "monitoring");
+  if (monitoringNav) {
+    monitoringNav.classList.toggle("hidden", !me.is_admin);
+  }
+  elements.monitorBtn.classList.toggle("hidden", !me.is_admin);
 
   setLoggedInUI();
   await mountView(state.activeView);
