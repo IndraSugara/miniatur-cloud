@@ -1207,7 +1207,7 @@
           </div>
           <div class="card">
             <div style="color: var(--text3); font-size: 12px">
-              User list via API /auth/me — add users with the form.
+              User list via admin API — add users with the form.
             </div>
             <div style="margin-top: 16px" id="user-info-box"></div>
           </div>
@@ -1496,6 +1496,81 @@ Loading...</pre
         return r.json();
       }
 
+      function unwrapInstances(payload) {
+        if (Array.isArray(payload)) return payload;
+        if (payload && Array.isArray(payload.instances))
+          return payload.instances;
+        return [];
+      }
+
+      function unwrapImages(payload) {
+        if (Array.isArray(payload)) return payload;
+        if (payload && Array.isArray(payload.images)) return payload.images;
+        return [];
+      }
+
+      function unwrapInstanceTypes(payload) {
+        if (Array.isArray(payload)) return payload;
+        if (payload && payload.instance_types) {
+          return Object.entries(payload.instance_types).map(([id, spec]) => ({
+            id,
+            ...spec,
+          }));
+        }
+        return [];
+      }
+
+      function unwrapUsers(payload) {
+        if (Array.isArray(payload)) return payload;
+        if (payload && Array.isArray(payload.users)) return payload.users;
+        return [];
+      }
+
+      function normalizeHostMetrics(d) {
+        const cpu = Number(d.cpu_percent || 0);
+        const memTotalGb =
+          d.memory_total_gb != null
+            ? Number(d.memory_total_gb)
+            : Number(d.memory_total || 0) / 1e9;
+        const memUsedGb =
+          d.memory_used_gb != null
+            ? Number(d.memory_used_gb)
+            : Number(d.memory_used || 0) / 1e9;
+        const memPct = Number(
+          d.memory_percent ||
+            (memTotalGb > 0 ? (memUsedGb / memTotalGb) * 100 : 0),
+        );
+        const diskTotalGb =
+          d.disk_total_gb != null
+            ? Number(d.disk_total_gb)
+            : Number(d.disk_total || 0) / 1e9;
+        const diskFreeGb =
+          d.disk_free_gb != null
+            ? Number(d.disk_free_gb)
+            : Number(d.disk_free || 0) / 1e9;
+        const diskUsedGb =
+          d.disk_used_gb != null
+            ? Number(d.disk_used_gb)
+            : d.disk_used != null
+              ? Number(d.disk_used || 0) / 1e9
+              : Math.max(diskTotalGb - diskFreeGb, 0);
+        const diskPct = Number(
+          d.disk_percent ||
+            (diskTotalGb > 0 ? (diskUsedGb / diskTotalGb) * 100 : 0),
+        );
+        const load = Array.isArray(d.load_avg) ? d.load_avg : [];
+        return {
+          cpu_percent: cpu,
+          memory_total_gb: memTotalGb,
+          memory_used_gb: memUsedGb,
+          memory_percent: memPct,
+          disk_total_gb: diskTotalGb,
+          disk_used_gb: diskUsedGb,
+          disk_percent: diskPct,
+          load_avg: load,
+        };
+      }
+
       // ============================================================
       // NAVIGATION
       // ============================================================
@@ -1576,24 +1651,23 @@ Loading...</pre
       }
 
       function updateMetricCards(d) {
-        const cpu = parseFloat(d.cpu_percent || 0);
-        const memPct = parseFloat(d.memory_percent || 0);
-        const diskPct = parseFloat(d.disk_percent || 0);
+        const m = normalizeHostMetrics(d);
+        const cpu = m.cpu_percent;
+        const memPct = m.memory_percent;
+        const diskPct = m.disk_percent;
 
         document.getElementById("m-cpu").textContent = cpu.toFixed(1) + "%";
         document.getElementById("bar-cpu").style.width = cpu + "%";
 
-        const memUsed = ((d.memory_used || 0) / 1024 / 1024 / 1024).toFixed(1);
-        const memTotal = ((d.memory_total || 0) / 1024 / 1024 / 1024).toFixed(
-          1,
-        );
+        const memUsed = m.memory_used_gb.toFixed(1);
+        const memTotal = m.memory_total_gb.toFixed(1);
         document.getElementById("m-mem").textContent = memPct.toFixed(0) + "%";
         document.getElementById("m-mem-sub").textContent =
           `${memUsed}/${memTotal} GB`;
         document.getElementById("bar-mem").style.width = memPct + "%";
 
-        const diskUsed = ((d.disk_used || 0) / 1024 / 1024 / 1024).toFixed(1);
-        const diskTotal = ((d.disk_total || 0) / 1024 / 1024 / 1024).toFixed(1);
+        const diskUsed = m.disk_used_gb.toFixed(1);
+        const diskTotal = m.disk_total_gb.toFixed(1);
         document.getElementById("m-disk").textContent =
           diskPct.toFixed(0) + "%";
         document.getElementById("m-disk-sub").textContent =
@@ -1633,7 +1707,8 @@ Loading...</pre
 
       async function refreshRecentInstances() {
         try {
-          const instances = await apiFetch("/instances");
+          const payload = await apiFetch("/instances");
+          const instances = unwrapInstances(payload);
           const container = document.getElementById("dash-recent-instances");
           const list = instances.slice(0, 5);
 
@@ -1675,7 +1750,8 @@ Loading...</pre
         const tbody = document.getElementById("instances-tbody");
         tbody.innerHTML = `<tr><td colspan="8"><div style="text-align:center;padding:24px;"><div class="spinner"></div></div></td></tr>`;
         try {
-          const instances = await apiFetch("/instances");
+          const payload = await apiFetch("/instances");
+          const instances = unwrapInstances(payload);
           if (instances.length === 0) {
             tbody.innerHTML = `<tr><td colspan="8">
         <div class="empty-state">
@@ -1749,7 +1825,10 @@ Loading...</pre
           toast(`Instance "${name}" launched!`, "success");
           showPage("instances");
           // auto-open ssh info after a moment
-          setTimeout(() => openSSHModal(inst.id), 800);
+          const instanceId = inst.id || inst.instance_id;
+          if (instanceId) {
+            setTimeout(() => openSSHModal(instanceId), 800);
+          }
         } catch (e) {
           errEl.textContent = e.message;
           errEl.classList.remove("hidden");
@@ -1891,30 +1970,25 @@ Loading...</pre
       async function fetchMonitorData() {
         try {
           const d = await apiFetch("/monitoring/host");
-          const cpu = parseFloat(d.cpu_percent || 0);
-          const memPct = parseFloat(d.memory_percent || 0);
-          const diskPct = parseFloat(d.disk_percent || 0);
-          const load = d.load_avg ? d.load_avg[0] : 0;
+          const m = normalizeHostMetrics(d);
+          const cpu = m.cpu_percent;
+          const memPct = m.memory_percent;
+          const diskPct = m.disk_percent;
+          const load = m.load_avg.length ? m.load_avg[0] : 0;
 
           document.getElementById("mon-cpu").textContent = cpu.toFixed(1) + "%";
           document.getElementById("mon-bar-cpu").style.width = cpu + "%";
 
-          const memUsed = ((d.memory_used || 0) / 1024 / 1024 / 1024).toFixed(
-            1,
-          );
-          const memTotal = ((d.memory_total || 0) / 1024 / 1024 / 1024).toFixed(
-            1,
-          );
+          const memUsed = m.memory_used_gb.toFixed(1);
+          const memTotal = m.memory_total_gb.toFixed(1);
           document.getElementById("mon-mem").textContent =
             memPct.toFixed(0) + "%";
           document.getElementById("mon-mem-sub").textContent =
             `${memUsed} / ${memTotal} GB`;
           document.getElementById("mon-bar-mem").style.width = memPct + "%";
 
-          const diskUsed = ((d.disk_used || 0) / 1024 / 1024 / 1024).toFixed(1);
-          const diskTotal = ((d.disk_total || 0) / 1024 / 1024 / 1024).toFixed(
-            1,
-          );
+          const diskUsed = m.disk_used_gb.toFixed(1);
+          const diskTotal = m.disk_total_gb.toFixed(1);
           document.getElementById("mon-disk").textContent =
             diskPct.toFixed(0) + "%";
           document.getElementById("mon-disk-sub").textContent =
@@ -1996,36 +2070,47 @@ Loading...</pre
       // ============================================================
       async function loadCatalog() {
         try {
-          const [images, types] = await Promise.all([
+          const [imagesPayload, typesPayload] = await Promise.all([
             apiFetch("/catalog/images"),
             apiFetch("/catalog/instance-types"),
           ]);
 
+          const images = unwrapImages(imagesPayload);
+          const types = unwrapInstanceTypes(typesPayload);
+
           document.getElementById("catalog-images").innerHTML = images
-            .map(
-              (img) => `
+            .map((img) => {
+              const id =
+                typeof img === "string" ? img : img.id || img.name || "";
+              const name =
+                typeof img === "string" ? img : img.name || img.id || id;
+              const desc = typeof img === "string" ? "" : img.description || "";
+              return `
       <div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border);">
-        <span style="font-size:18px;">${imgIcon(img.id || img)}</span>
+        <span style="font-size:18px;">${imgIcon(id)}</span>
         <div>
-          <div style="font-weight:500;font-size:13px;">${img.name || img.id || img}</div>
-          <div style="font-size:11px;color:var(--text3);">${img.description || ""}</div>
+          <div style="font-weight:500;font-size:13px;">${name}</div>
+          <div style="font-size:11px;color:var(--text3);">${desc}</div>
         </div>
       </div>
-    `,
-            )
+    `;
+            })
             .join("");
 
           document.getElementById("catalog-types").innerHTML = types
-            .map(
-              (t) => `
+            .map((t) => {
+              const id = t.id || t.name || "";
+              const vcpu = t.vcpu != null ? t.vcpu : "?";
+              const mem = t.memory_mb != null ? t.memory_mb : "?";
+              return `
       <div style="padding:10px 0;border-bottom:1px solid var(--border);">
         <div style="display:flex;align-items:center;justify-content:space-between;">
-          <span class="type-badge">${t.id || t.name}</span>
-          <span style="font-size:11px;color:var(--text3);">${t.vcpu || "?"} vCPU · ${t.memory_mb || "?"} MB</span>
+          <span class="type-badge">${id}</span>
+          <span style="font-size:11px;color:var(--text3);">${vcpu} vCPU · ${mem} MB</span>
         </div>
       </div>
-    `,
-            )
+    `;
+            })
             .join("");
         } catch (e) {
           document.getElementById("catalog-images").innerHTML =
@@ -2034,10 +2119,11 @@ Loading...</pre
       }
 
       function imgIcon(id) {
-        if (id.includes("ubuntu")) return "🟠";
-        if (id.includes("alpine")) return "🏔️";
-        if (id.includes("debian")) return "🌀";
-        if (id.includes("nginx")) return "🟩";
+        const key = String(id || "");
+        if (key.includes("ubuntu")) return "🟠";
+        if (key.includes("alpine")) return "🏔️";
+        if (key.includes("debian")) return "🌀";
+        if (key.includes("nginx")) return "🟩";
         return "💿";
       }
 
@@ -2061,13 +2147,64 @@ Loading...</pre
       // USERS
       // ============================================================
       async function loadUserInfo() {
+        const box = document.getElementById("user-info-box");
         try {
           const me = await apiFetch("/auth/me");
-          document.getElementById("user-info-box").innerHTML = `
+          let html = `
       <div style="font-size:12px;color:var(--text2);">Logged in as:</div>
       <pre style="font-size:12px;color:var(--green2);margin-top:8px;line-height:1.8;">${JSON.stringify(me, null, 2)}</pre>
     `;
-        } catch (e) {}
+
+          try {
+            const usersPayload = await apiFetch("/admin/users");
+            const users = unwrapUsers(usersPayload);
+            if (users.length === 0) {
+              html += `<div style="margin-top:12px;color:var(--text3);font-size:12px;">No users found.</div>`;
+            } else {
+              html += `
+      <div style="margin-top:16px;">
+        <div class="card-title" style="margin-bottom:8px;">All Users</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Quota</th>
+                <th>Status</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${users
+                .map(
+                  (u) => `
+                <tr>
+                  <td style="font-weight:500;">${u.username}</td>
+                  <td>${u.email}</td>
+                  <td>${u.is_admin ? "admin" : "user"}</td>
+                  <td>${u.quota_instances}</td>
+                  <td>${u.is_active ? "active" : "disabled"}</td>
+                  <td>${fmtDate(u.created_at)}</td>
+                </tr>
+              `,
+                )
+                .join("")}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+            }
+          } catch (e) {
+            html += `<div style="margin-top:12px;color:var(--text3);font-size:12px;">${e.message}</div>`;
+          }
+
+          box.innerHTML = html;
+        } catch (e) {
+          box.innerHTML = `<div style="color:var(--red2);font-size:12px;">${e.message}</div>`;
+        }
       }
 
       function openRegisterModal() {
@@ -2090,6 +2227,7 @@ Loading...</pre
           msgEl.textContent = `User "${user}" registered successfully!`;
           setTimeout(() => closeModal("modal-register"), 1500);
           toast("User registered!", "success");
+          loadUserInfo();
         } catch (e) {
           msgEl.className = "error-msg";
           msgEl.textContent = e.message;

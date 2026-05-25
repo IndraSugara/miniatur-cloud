@@ -34,12 +34,70 @@ class Instance(Base):
     instance_type  = Column(String(32), nullable=False)
     vcpu           = Column(Float, default=0.5)
     memory_mb      = Column(Integer, default=256)
+    network_id     = Column(String(36), nullable=True)
+    security_group_id = Column(String(36), nullable=True)
     container_id   = Column(String(64), nullable=True)
     ip_address     = Column(String(15), nullable=True)
     ssh_port       = Column(Integer, nullable=True)
     ssh_password   = Column(String(32), nullable=True)
     created_at     = Column(DateTime, default=datetime.utcnow)
     updated_at     = Column(DateTime, default=datetime.utcnow)
+
+class Network(Base):
+    __tablename__ = "networks"
+    id          = Column(String(36), primary_key=True)
+    name        = Column(String(64), nullable=False)
+    owner_id    = Column(String(36), nullable=False)
+    cidr        = Column(String(32), nullable=True)
+    gateway     = Column(String(32), nullable=True)
+    docker_name = Column(String(128), nullable=False)
+    is_default  = Column(Boolean, default=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+class SecurityGroup(Base):
+    __tablename__ = "security_groups"
+    id          = Column(String(36), primary_key=True)
+    name        = Column(String(64), nullable=False)
+    owner_id    = Column(String(36), nullable=False)
+    is_default  = Column(Boolean, default=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+class SecurityGroupRule(Base):
+    __tablename__ = "security_group_rules"
+    id          = Column(String(36), primary_key=True)
+    group_id    = Column(String(36), nullable=False)
+    direction   = Column(String(16), default="ingress")
+    protocol    = Column(String(8), default="tcp")
+    port_min    = Column(Integer, nullable=False)
+    port_max    = Column(Integer, nullable=False)
+    cidr        = Column(String(32), default="0.0.0.0/0")
+    created_at  = Column(DateTime, default=datetime.utcnow)
+
+class Snapshot(Base):
+    __tablename__ = "snapshots"
+    id                 = Column(String(36), primary_key=True)
+    name               = Column(String(128), nullable=False)
+    owner_id           = Column(String(36), nullable=False)
+    source_instance_id = Column(String(36), nullable=False)
+    image_ref          = Column(String(256), nullable=False)
+    created_at         = Column(DateTime, default=datetime.utcnow)
+
+class ObjectBucket(Base):
+    __tablename__ = "object_buckets"
+    id         = Column(String(36), primary_key=True)
+    name       = Column(String(63), unique=True, nullable=False)
+    owner_id   = Column(String(36), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+class FloatingIP(Base):
+    __tablename__ = "floating_ips"
+    id           = Column(String(36), primary_key=True)
+    owner_id     = Column(String(36), nullable=False)
+    public_ip    = Column(String(64), nullable=False)
+    public_port  = Column(Integer, nullable=False)
+    instance_id  = Column(String(36), nullable=True)
+    status       = Column(String(32), default="available")
+    created_at   = Column(DateTime, default=datetime.utcnow)
 
 class Volume(Base):
     __tablename__ = "volumes"
@@ -50,3 +108,11 @@ class Volume(Base):
     host_path  = Column(String(512), nullable=True)
     status     = Column(String(32), default="available")
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class VolumeAttachment(Base):
+    __tablename__ = "volume_attachments"
+    id          = Column(String(36), primary_key=True)
+    volume_id   = Column(String(36), nullable=False)
+    instance_id = Column(String(36), nullable=False)
+    mount_path  = Column(String(128), nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)

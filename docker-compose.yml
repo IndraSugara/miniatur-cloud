@@ -125,6 +125,13 @@ services:
     environment:
       SECRET_KEY: iaas-jetson-rahasia-ganti-ini
       DATABASE_URL: sqlite:///./iaas.db
+      MINIO_ENDPOINT: cloud-storage:9000
+      MINIO_ACCESS_KEY: admin
+      MINIO_SECRET_KEY: CloudPass2024!
+      MINIO_SECURE: "false"
+      PUBLIC_HOST: 192.168.1.2
+      FLOATING_PORT_START: "2300"
+      FLOATING_PORT_END: "2399"
     networks:
       - cloud-net
     restart: unless-stopped
