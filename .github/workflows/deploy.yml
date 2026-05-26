@@ -47,4 +47,9 @@ jobs:
             -o "ProxyCommand=${PROXY_CMD}" \
             -p "${SSH_PORT}" \
             "${SSH_USERNAME}@${SSH_HOST}" \
-            "cd /home/sugara-jetson/miniatur-cloud && git pull origin main && echo '--- DEPLOY BERHASIL ---'"
+            "cd /home/sugara-jetson/miniatur-cloud \
+            && (git stash push -u -m \"auto-stash-before-deploy-\$(date +%Y%m%d-%H%M%S)\" || true) \
+            && git fetch origin main \
+            && git reset --hard origin/main \
+            && git clean -fd \
+            && echo '--- DEPLOY BERHASIL ---'"

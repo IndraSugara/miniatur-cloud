@@ -125,6 +125,7 @@ services:
     environment:
       SECRET_KEY: iaas-jetson-rahasia-ganti-ini
       DATABASE_URL: sqlite:///./iaas.db
+      PYTHONDONTWRITEBYTECODE: "1"
       MINIO_ENDPOINT: cloud-storage:9000
       MINIO_ACCESS_KEY: admin
       MINIO_SECRET_KEY: CloudPass2024!

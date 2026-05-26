@@ -48,7 +48,7 @@ logging.basicConfig(level=logging.INFO,
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 log = logging.getLogger("iaas.api")
 
-# ── Database ─────────────────────────────────────────────────
+# ── Databases ─────────────────────────────────────────────────
 engine  = create_engine(DB_SYNC_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(bind=engine)
 
