@@ -1,6 +1,6 @@
 import { REFRESH_MS } from "../config.js";
 import { escapeHtml, toLocalDate } from "../utils.js";
-import { toast } from "../ui.js";
+import { showModal, toast } from "../ui.js";
 
 function em(error) {
   return error instanceof Error ? error.message : String(error);
@@ -246,20 +246,48 @@ export const storageView = {
 
       const attachId = target.dataset.volAttach;
       if (attachId) {
-        const options = instances
-          .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()))
-          .map((item) => `${item.id}:${item.name}`)
-          .join("\n");
-        const instanceId = window.prompt(`Masukkan instance_id target:\n${options}`);
-        if (!instanceId) return;
-        const mountPath = window.prompt("Mount path (opsional)", `/mnt/vol-${attachId}`) || undefined;
-        try {
-          await apis.storage.attachVolume(attachId, { instance_id: instanceId.trim(), mount_path: mountPath });
-          toast("Volume terpasang.");
-          await loadAll();
-        } catch (error) {
-          toast(em(error), "error");
+        const eligible = instances
+          .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
+        if (eligible.length === 0) {
+          toast("Tidak ada instance yang bisa dipasang.", "error");
+          return;
         }
+        const optionsHtml = eligible
+          .map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${item.status})</option>`)
+          .join("");
+        const modal = showModal({
+          title: "Attach Volume",
+          bodyHtml: `
+            <div class="grid grid-2">
+              <div>
+                <label class="field-label" for="vol-attach-inst">Instance</label>
+                <select id="vol-attach-inst">${optionsHtml}</select>
+              </div>
+              <div>
+                <label class="field-label" for="vol-attach-path">Mount Path</label>
+                <input id="vol-attach-path" value="/mnt/vol-${attachId}" />
+              </div>
+            </div>
+          `,
+          actions: [
+            {
+              label: "Attach",
+              className: "btn btn-primary",
+              onClick: async ({ close }) => {
+                const instanceId = modal.wrapper.querySelector("#vol-attach-inst").value;
+                const mountPath = modal.wrapper.querySelector("#vol-attach-path").value.trim() || undefined;
+                try {
+                  await apis.storage.attachVolume(attachId, { instance_id: instanceId, mount_path: mountPath });
+                  toast("Volume terpasang.");
+                  close();
+                  await loadAll();
+                } catch (error) {
+                  toast(em(error), "error");
+                }
+              },
+            },
+          ],
+        });
         return;
       }
 

@@ -13,6 +13,8 @@ INSTANCE_TYPES = {
     "nano.small" : {"vcpu": 0.5,  "memory_mb": 256},
     "nano.medium": {"vcpu": 1.0,  "memory_mb": 512},
     "nano.large" : {"vcpu": 2.0,  "memory_mb": 1024},
+    "nano.xlarge": {"vcpu": 2.0,  "memory_mb": 2048},
+    "nano.nlp"   : {"vcpu": 2.0,  "memory_mb": 1536},
 }
 
 AVAILABLE_IMAGES = {

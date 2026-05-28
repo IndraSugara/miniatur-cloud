@@ -414,10 +414,30 @@ export const computeView = {
           return;
         }
         if (action === "snapshot") {
-          const name = window.prompt("Nama snapshot (opsional):", "");
-          await apis.compute.createSnapshot(id, name || null);
-          toast("Snapshot berhasil dibuat.");
-          await renderSnapshots();
+          const modal = showModal({
+            title: "Create Snapshot",
+            bodyHtml: `
+              <label class="field-label" for="snap-name">Nama snapshot (opsional)</label>
+              <input id="snap-name" placeholder="my-snapshot" />
+            `,
+            actions: [
+              {
+                label: "Create",
+                className: "btn btn-primary",
+                onClick: async ({ close }) => {
+                  const name = modal.wrapper.querySelector("#snap-name").value.trim();
+                  try {
+                    await apis.compute.createSnapshot(id, name || null);
+                    toast("Snapshot berhasil dibuat.");
+                    close();
+                    await renderSnapshots();
+                  } catch (err) {
+                    toast(extractMessage(err), "error");
+                  }
+                },
+              },
+            ],
+          });
           return;
         }
         if (action === "terminate") {

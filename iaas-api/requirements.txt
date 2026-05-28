@@ -10,3 +10,4 @@ psutil==5.9.8
 python-multipart==0.0.9
 asyncpg==0.29.0
 minio==7.2.7
+redis==5.0.4

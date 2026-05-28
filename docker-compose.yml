@@ -59,6 +59,35 @@ services:
       - cloud-net
     restart: unless-stopped
 
+  # ── Monitoring Stack ──────────────────────────────────────
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - cloud-net
+    restart: unless-stopped
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://clouduser:CloudPass2024!@cloud-db:5432/clouddb?sslmode=disable"
+    networks:
+      - cloud-net
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
   prometheus:
     image: prom/prometheus:latest
     container_name: cloud-metrics
@@ -69,6 +98,9 @@ services:
       - prometheus-data:/prometheus
     networks:
       - cloud-net
+    depends_on:
+      - node-exporter
+      - postgres-exporter
     restart: unless-stopped
 
   grafana:
@@ -78,14 +110,17 @@ services:
       - "3000:3000"
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
     networks:
       - cloud-net
     depends_on:
       - prometheus
+      - loki
     restart: unless-stopped
 
+  # ── Logging Stack ─────────────────────────────────────────
   loki:
     image: grafana/loki:latest
     container_name: cloud-logs
@@ -97,6 +132,21 @@ services:
       - cloud-net
     restart: unless-stopped
 
+  promtail:
+    image: grafana/promtail:latest
+    container_name: cloud-promtail
+    volumes:
+      - ./promtail/config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - cloud-net
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  # ── Gateway ───────────────────────────────────────────────
   nginx:
     image: nginx:alpine
     container_name: cloud-gateway
@@ -112,6 +162,7 @@ services:
       - grafana
     restart: unless-stopped
 
+  # ── Core API ──────────────────────────────────────────────
   iaas-api:
     build:
       context: ./iaas-api
@@ -133,6 +184,9 @@ services:
       PUBLIC_HOST: 192.168.1.2
       FLOATING_PORT_START: "2300"
       FLOATING_PORT_END: "2399"
+      REDIS_URL: redis://cloud-cache:6379/0
     networks:
       - cloud-net
+    depends_on:
+      - redis
     restart: unless-stopped

@@ -320,21 +320,48 @@ export const networkView = {
 
       const addRule = target.dataset.ruleAdd;
       if (addRule) {
-        const portMin = Number(window.prompt("port_min", "22"));
-        const portMax = Number(window.prompt("port_max", String(portMin)));
-        const cidr = window.prompt("cidr", "0.0.0.0/0") || "0.0.0.0/0";
-        if (!Number.isFinite(portMin) || !Number.isFinite(portMax)) return;
-        try {
-          await apis.network.addSecurityGroupRule(addRule, {
-            port_min: portMin,
-            port_max: portMax,
-            cidr,
-          });
-          toast("Rule ditambahkan.");
-          await loadAll();
-        } catch (error) {
-          toast(errMsg(error), "error");
-        }
+        const modal = showModal({
+          title: "Add Security Group Rule",
+          bodyHtml: `
+            <div class="grid grid-3">
+              <div>
+                <label class="field-label" for="rule-port-min">Port Min</label>
+                <input id="rule-port-min" type="number" value="22" min="1" max="65535" />
+              </div>
+              <div>
+                <label class="field-label" for="rule-port-max">Port Max</label>
+                <input id="rule-port-max" type="number" value="22" min="1" max="65535" />
+              </div>
+              <div>
+                <label class="field-label" for="rule-cidr">CIDR</label>
+                <input id="rule-cidr" value="0.0.0.0/0" />
+              </div>
+            </div>
+          `,
+          actions: [
+            {
+              label: "Add Rule",
+              className: "btn btn-primary",
+              onClick: async ({ close }) => {
+                const portMin = Number(modal.wrapper.querySelector("#rule-port-min").value);
+                const portMax = Number(modal.wrapper.querySelector("#rule-port-max").value);
+                const cidr = modal.wrapper.querySelector("#rule-cidr").value || "0.0.0.0/0";
+                if (!Number.isFinite(portMin) || !Number.isFinite(portMax)) {
+                  toast("Port harus angka.", "error");
+                  return;
+                }
+                try {
+                  await apis.network.addSecurityGroupRule(addRule, { port_min: portMin, port_max: portMax, cidr });
+                  toast("Rule ditambahkan.");
+                  close();
+                  await loadAll();
+                } catch (error) {
+                  toast(errMsg(error), "error");
+                }
+              },
+            },
+          ],
+        });
         return;
       }
 
@@ -384,18 +411,38 @@ export const networkView = {
       const attachId = target.dataset.fipAttach;
       if (attachId) {
         const choices = instances
-          .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()))
-          .map((item) => `${item.id}:${escapeHtml(item.name)}`)
-          .join("\n");
-        const input = window.prompt(`Masukkan instance_id tujuan:\n${choices}`);
-        if (!input) return;
-        try {
-          await apis.network.attachFloatingIp(attachId, input.trim());
-          toast("Floating IP terpasang.");
-          await loadAll();
-        } catch (error) {
-          toast(errMsg(error), "error");
+          .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
+        if (choices.length === 0) {
+          toast("Tidak ada instance yang bisa dipasang.", "error");
+          return;
         }
+        const optionsHtml = choices
+          .map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${item.status})</option>`)
+          .join("");
+        const modal = showModal({
+          title: "Attach Floating IP",
+          bodyHtml: `
+            <label class="field-label" for="fip-target">Pilih Instance</label>
+            <select id="fip-target">${optionsHtml}</select>
+          `,
+          actions: [
+            {
+              label: "Attach",
+              className: "btn btn-primary",
+              onClick: async ({ close }) => {
+                const instanceId = modal.wrapper.querySelector("#fip-target").value;
+                try {
+                  await apis.network.attachFloatingIp(attachId, instanceId);
+                  toast("Floating IP terpasang.");
+                  close();
+                  await loadAll();
+                } catch (error) {
+                  toast(errMsg(error), "error");
+                }
+              },
+            },
+          ],
+        });
       }
     });
 
