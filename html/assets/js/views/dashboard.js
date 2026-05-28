@@ -30,7 +30,7 @@ export const dashboardView = {
       <div class="grid grid-2">
         <section class="panel">
           <h3>Compute Summary</h3>
-          <div id="summary-data" class="dim"><span class="spinner"></span> Memuat…</div>
+          <div id="summary-data" class="dim"><span class="spinner"></span> Memuatï¿½</div>
           <div class="toolbar" style="margin-top:10px;">
             <button class="btn btn-inline" data-nav="compute">Buka Compute</button>
             <button class="btn btn-inline" data-nav="network">Buka Network</button>
@@ -40,7 +40,7 @@ export const dashboardView = {
 
         <section class="panel">
           <h3>Service Health</h3>
-          <pre id="health-box" class="mono dim"><span class="spinner"></span> Memuat…</pre>
+          <div id="health-box" class="dim"><span class="spinner"></span> Memuat...</div>
         </section>
       </div>
 
@@ -59,7 +59,7 @@ export const dashboardView = {
               </tr>
             </thead>
             <tbody id="recent-instance-body">
-              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuatï¿½</td></tr>
             </tbody>
           </table>
         </div>
@@ -127,7 +127,12 @@ export const dashboardView = {
         </div>
       `;
 
-      healthEl.textContent = JSON.stringify(health, null, 2);
+      healthEl.className = "grid";
+      healthEl.innerHTML = `
+        <div>Status: <strong>${escapeHtml(health?.status || "-")}</strong></div>
+        <div>Service: <strong>${escapeHtml(health?.service || "-")}</strong></div>
+        <div>Waktu: <strong>${escapeHtml(toLocalDate(health?.time))}</strong></div>
+      `;
 
       const list = (instancesPayload.instances || []).slice(0, 8);
       if (list.length === 0) {

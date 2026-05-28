@@ -5,6 +5,21 @@ function message(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function renderCurrentUser(user) {
+  const username = escapeHtml(user?.username || "-");
+  const email = escapeHtml(user?.email || "-");
+  const quota = escapeHtml(user?.quota_instances ?? "-");
+  const userId = escapeHtml(user?.id || "-");
+  const role = user?.is_admin ? '<span class="badge-admin">admin</span>' : "user";
+  return `
+    <div>Username: <strong>${username}</strong></div>
+    <div>Email: <strong>${email}</strong></div>
+    <div>Role: ${role}</div>
+    <div>Quota Instances: <strong>${quota}</strong></div>
+    <div>User ID: <span class="mono">${userId}</span></div>
+  `;
+}
+
 export const adminView = {
   id: "admin",
   title: "Admin",
@@ -34,7 +49,7 @@ export const adminView = {
 
       <section class="panel">
         <h3>Current User</h3>
-        <pre id="me-box" class="mono dim"><span class="spinner"></span> Memuat…</pre>
+        <div id="me-box" class="dim"><span class="spinner"></span> Memuat...</div>
       </section>
 
       <section class="panel">
@@ -52,7 +67,7 @@ export const adminView = {
               </tr>
             </thead>
             <tbody id="users-body">
-              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuatï¿½</td></tr>
             </tbody>
           </table>
         </div>
@@ -63,8 +78,14 @@ export const adminView = {
     const usersBody = root.querySelector("#users-body");
 
     async function load() {
-      const me = await apis.auth.me();
-      meBox.textContent = JSON.stringify(me, null, 2);
+      try {
+        const me = await apis.auth.me();
+        meBox.className = "grid";
+        meBox.innerHTML = renderCurrentUser(me);
+      } catch (error) {
+        meBox.className = "message error";
+        meBox.textContent = message(error);
+      }
 
       try {
         const usersPayload = await apis.admin.listUsers();
