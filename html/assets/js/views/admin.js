@@ -34,7 +34,7 @@ export const adminView = {
 
       <section class="panel">
         <h3>Current User</h3>
-        <pre id="me-box" class="mono dim">Loading...</pre>
+        <pre id="me-box" class="mono dim"><span class="spinner"></span> Memuat…</pre>
       </section>
 
       <section class="panel">
@@ -52,7 +52,7 @@ export const adminView = {
               </tr>
             </thead>
             <tbody id="users-body">
-              <tr><td colspan="6" class="dim">Loading...</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
             </tbody>
           </table>
         </div>

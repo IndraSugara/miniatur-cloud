@@ -73,7 +73,7 @@ export const computeView = {
               </tr>
             </thead>
             <tbody id="instance-body">
-              <tr><td colspan="8" class="dim">Loading...</td></tr>
+              <tr><td colspan="8" class="dim"><span class="spinner"></span> Memuat instance…</td></tr>
             </tbody>
           </table>
         </div>
@@ -96,7 +96,7 @@ export const computeView = {
               </tr>
             </thead>
             <tbody id="snapshot-body">
-              <tr><td colspan="5" class="dim">Loading...</td></tr>
+              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat snapshot…</td></tr>
             </tbody>
           </table>
         </div>
@@ -162,6 +162,12 @@ export const computeView = {
       )}`;
     }
 
+    function resolveNetworkName(networkId) {
+      if (!networkId) return "-";
+      const net = networkList.find((n) => n.id === networkId);
+      return net ? net.name : networkId.slice(0, 8) + "…";
+    }
+
     function renderInstances() {
       if (instances.length === 0) {
         instanceBody.innerHTML = `<tr><td colspan="8" class="dim">Belum ada instance.</td></tr>`;
@@ -175,7 +181,7 @@ export const computeView = {
               <td><span class="status ${statusClass(item.status)}">${item.status}</span></td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
-              <td class="mono">${escapeHtml(item.network_id || "-")}</td>
+              <td class="mono">${escapeHtml(resolveNetworkName(item.network_id))}</td>
               <td class="mono">${escapeHtml(item.floating_ip || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
               <td>${toLocalDate(item.created_at)}</td>
               <td>
@@ -272,6 +278,13 @@ export const computeView = {
               <div class="dim">Floating IP</div>
               <div class="mono">${escapeHtml(detail.floating_ip || "-")}</div>
             </div>
+            <div>
+              <div class="dim">vCPU / RAM</div>
+              <div class="mono">${detail.vcpu || "-"} vCPU / ${detail.memory_mb || "-"} MB</div>
+            </div>
+          </div>
+          <div id="instance-metrics" style="margin-top:12px;">
+            <div class="dim"><span class="spinner"></span> Memuat metrics…</div>
           </div>
           <hr style="border-color:var(--line);margin:14px 0;" />
           <div class="grid grid-2">
@@ -304,6 +317,45 @@ export const computeView = {
       const msg = modalRoot.querySelector("#modal-detail-message");
       const applyNetworkBtn = modalRoot.querySelector("#modal-apply-network");
       const applySgBtn = modalRoot.querySelector("#modal-apply-sg");
+
+      // Fetch instance metrics asynchronously
+      const metricsBox = modalRoot.querySelector("#instance-metrics");
+      if (detail.status === "running") {
+        apis.compute.getInstanceStatus(instanceId).then((stats) => {
+          const cpuPct = stats.cpu_percent != null ? stats.cpu_percent.toFixed(1) : "N/A";
+          const memUsed = stats.memory_mb != null ? stats.memory_mb.toFixed(0) : "-";
+          const memLimit = stats.memory_limit_mb != null ? stats.memory_limit_mb.toFixed(0) : "-";
+          const memPct = (stats.memory_mb && stats.memory_limit_mb)
+            ? ((stats.memory_mb / stats.memory_limit_mb) * 100).toFixed(0) : 0;
+          const pids = stats.pids ?? "-";
+          metricsBox.innerHTML = `
+            <div class="grid grid-3" style="gap:8px;">
+              <div>
+                <div class="dim" style="font-size:0.75rem;">CPU</div>
+                <div class="mono">${cpuPct}%</div>
+                <div style="background:var(--panel-2);border-radius:4px;height:6px;margin-top:4px;">
+                  <div style="width:${Math.min(cpuPct, 100)}%;height:100%;background:var(--primary);border-radius:4px;transition:width .3s;"></div>
+                </div>
+              </div>
+              <div>
+                <div class="dim" style="font-size:0.75rem;">Memory</div>
+                <div class="mono">${memUsed} / ${memLimit} MB</div>
+                <div style="background:var(--panel-2);border-radius:4px;height:6px;margin-top:4px;">
+                  <div style="width:${Math.min(memPct, 100)}%;height:100%;background:${memPct > 80 ? 'var(--warn)' : 'var(--ok)'};border-radius:4px;transition:width .3s;"></div>
+                </div>
+              </div>
+              <div>
+                <div class="dim" style="font-size:0.75rem;">PIDs</div>
+                <div class="mono">${pids}</div>
+              </div>
+            </div>
+          `;
+        }).catch(() => {
+          metricsBox.innerHTML = `<div class="dim" style="font-size:0.85rem;">Metrics tidak tersedia.</div>`;
+        });
+      } else {
+        metricsBox.innerHTML = `<div class="dim" style="font-size:0.85rem;">Metrics hanya tersedia untuk instance running.</div>`;
+      }
 
       applyNetworkBtn.addEventListener("click", async () => {
         try {

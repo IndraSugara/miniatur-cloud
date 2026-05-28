@@ -30,7 +30,7 @@ export const dashboardView = {
       <div class="grid grid-2">
         <section class="panel">
           <h3>Compute Summary</h3>
-          <div id="summary-data" class="dim">Loading...</div>
+          <div id="summary-data" class="dim"><span class="spinner"></span> Memuat…</div>
           <div class="toolbar" style="margin-top:10px;">
             <button class="btn btn-inline" data-nav="compute">Buka Compute</button>
             <button class="btn btn-inline" data-nav="network">Buka Network</button>
@@ -40,7 +40,7 @@ export const dashboardView = {
 
         <section class="panel">
           <h3>Service Health</h3>
-          <pre id="health-box" class="mono dim">Loading...</pre>
+          <pre id="health-box" class="mono dim"><span class="spinner"></span> Memuat…</pre>
         </section>
       </div>
 
@@ -59,7 +59,7 @@ export const dashboardView = {
               </tr>
             </thead>
             <tbody id="recent-instance-body">
-              <tr><td colspan="6" class="dim">Loading...</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
             </tbody>
           </table>
         </div>

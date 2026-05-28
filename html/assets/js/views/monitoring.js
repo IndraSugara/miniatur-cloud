@@ -50,7 +50,7 @@ export const monitoringView = {
 
       <section class="panel">
         <h3>Raw Payload</h3>
-        <pre id="raw-monitor" class="mono dim">Loading...</pre>
+        <pre id="raw-monitor" class="mono dim"><span class="spinner"></span> Memuat…</pre>
       </section>
     `;
 

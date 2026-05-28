@@ -21,9 +21,10 @@ export function toast(message, type = "ok") {
   node.className = `toast ${type}`;
   node.textContent = message;
   root.appendChild(node);
+  const duration = type === "error" ? 5000 : 2000;
   window.setTimeout(() => {
     node.remove();
-  }, 3000);
+  }, duration);
 }
 
 export function showModal({ title, bodyHtml, actions = [] }) {

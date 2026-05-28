@@ -3,11 +3,11 @@ name: CI/CD Jetson Nano via Tunnel SSH
 on:
   push:
     branches:
-      - main # Trigger jalan setiap kali Anda push ke branch main
+      - main
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest # Menggunakan server cloud GitHub untuk memerintah
+    runs-on: ubuntu-latest
 
     steps:
       - name: Install Cloudflare Client
@@ -49,7 +49,13 @@ jobs:
             "${SSH_USERNAME}@${SSH_HOST}" \
             "cd /home/sugara-jetson/miniatur-cloud \
             && (git stash push -u -m \"auto-stash-before-deploy-\$(date +%Y%m%d-%H%M%S)\" || true) \
+            && OLD_HEAD=\$(git rev-parse HEAD) \
             && git fetch origin main \
             && git reset --hard origin/main \
             && git clean -fd \
+            && NEW_HEAD=\$(git rev-parse HEAD) \
+            && CHANGED_FILES=\$(git diff --name-only \"\$OLD_HEAD\" \"\$NEW_HEAD\") \
+            && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^docker-compose\.yml$'; then docker compose up -d; fi \
+            && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^iaas-api/'; then docker compose build iaas-api && docker compose up -d iaas-api; fi \
+            && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^(html/|nginx/)'; then docker exec cloud-gateway nginx -s reload; fi \
             && echo '--- DEPLOY BERHASIL ---'"

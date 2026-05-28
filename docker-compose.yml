@@ -30,6 +30,7 @@ services:
     command: server /data --console-address ":9001"
     networks:
       - cloud-net
+    mem_limit: 256m
     restart: unless-stopped
 
   postgres:
@@ -45,6 +46,7 @@ services:
       POSTGRES_DB: clouddb
     networks:
       - cloud-net
+    mem_limit: 256m
     restart: unless-stopped
 
   redis:
@@ -54,9 +56,10 @@ services:
       - "6379:6379"
     volumes:
       - redis-data:/data
-    command: redis-server --appendonly yes
+    command: redis-server --appendonly yes --maxmemory 32mb --maxmemory-policy allkeys-lru
     networks:
       - cloud-net
+    mem_limit: 64m
     restart: unless-stopped
 
   # ── Monitoring Stack ──────────────────────────────────────
@@ -75,6 +78,7 @@ services:
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
     networks:
       - cloud-net
+    mem_limit: 64m
     restart: unless-stopped
 
   postgres-exporter:
@@ -86,6 +90,7 @@ services:
       - cloud-net
     depends_on:
       - postgres
+    mem_limit: 64m
     restart: unless-stopped
 
   prometheus:
@@ -101,6 +106,7 @@ services:
     depends_on:
       - node-exporter
       - postgres-exporter
+    mem_limit: 256m
     restart: unless-stopped
 
   grafana:
@@ -118,6 +124,7 @@ services:
     depends_on:
       - prometheus
       - loki
+    mem_limit: 256m
     restart: unless-stopped
 
   # ── Logging Stack ─────────────────────────────────────────
@@ -130,6 +137,7 @@ services:
       - loki-data:/loki
     networks:
       - cloud-net
+    mem_limit: 128m
     restart: unless-stopped
 
   promtail:
@@ -144,6 +152,7 @@ services:
       - cloud-net
     depends_on:
       - loki
+    mem_limit: 64m
     restart: unless-stopped
 
   # ── Gateway ───────────────────────────────────────────────
@@ -160,6 +169,7 @@ services:
     depends_on:
       - minio
       - grafana
+    mem_limit: 64m
     restart: unless-stopped
 
   # ── Core API ──────────────────────────────────────────────
@@ -189,4 +199,5 @@ services:
       - cloud-net
     depends_on:
       - redis
+    mem_limit: 256m
     restart: unless-stopped

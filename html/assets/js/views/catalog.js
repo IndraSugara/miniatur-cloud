@@ -9,11 +9,11 @@ export const catalogView = {
       <div class="grid grid-2">
         <section class="panel">
           <h3>Images</h3>
-          <div id="image-list" class="dim">Loading...</div>
+          <div id="image-list" class="dim"><span class="spinner"></span> Memuat…</div>
         </section>
         <section class="panel">
           <h3>Instance Types</h3>
-          <div id="type-list" class="dim">Loading...</div>
+          <div id="type-list" class="dim"><span class="spinner"></span> Memuat…</div>
         </section>
       </div>
     `;

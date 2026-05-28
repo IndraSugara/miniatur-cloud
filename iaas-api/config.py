@@ -1,7 +1,19 @@
+
+import logging
 import os
 import re
+import secrets
 
-SECRET_KEY   = os.getenv("SECRET_KEY", "iaas-jetson-secret-ganti-ini")
+_raw_secret = os.getenv("SECRET_KEY", "")
+_PLACEHOLDERS = {"", "iaas-jetson-secret-ganti-ini", "iaas-jetson-rahasia-ganti-ini"}
+if _raw_secret in _PLACEHOLDERS:
+    SECRET_KEY = secrets.token_urlsafe(48)
+    logging.getLogger("iaas.config").warning(
+        "SECRET_KEY belum di-set atau masih placeholder — menggunakan random key. "
+        "Set SECRET_KEY di environment untuk JWT yang persisten antar restart."
+    )
+else:
+    SECRET_KEY = _raw_secret
 ALGORITHM    = "HS256"
 TOKEN_EXPIRE = 60
 DB_URL       = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./iaas.db")

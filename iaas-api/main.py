@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,32 +25,11 @@ logging.basicConfig(
 )
 log = logging.getLogger("iaas.api")
 
-# ── App ───────────────────────────────────────────────────────
-app = FastAPI(
-    title="Miniatur IaaS API",
-    description="Infrastructure as a Service — Jetson Nano",
-    version="1.0.0",
-)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-    allow_credentials=True,
-)
-
-# ── Register routers ─────────────────────────────────────────
-app.include_router(auth_router)
-app.include_router(compute_router)
-app.include_router(network_router)
-app.include_router(storage_router)
-app.include_router(monitoring_router)
-
-
-# ── Startup: buat admin default ───────────────────────────────
-@app.on_event("startup")
-def startup():
+# ── Lifespan ──────────────────────────────────────────────────
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    # ── startup ──
     db = SessionLocal()
     admin = db.query(User).filter(User.username == "admin").first()
     if not admin:
@@ -69,5 +49,35 @@ def startup():
         ensure_default_network(db, admin.id)
         ensure_default_security_group(db, admin.id)
     except Exception as e:
-        log.error(f"Gagal memastikan default network: {e}")
+        log.error(f"Gagal memastikan default network/sg: {e}")
     db.close()
+    log.info("Miniatur IaaS API ready")
+
+    yield  # ── app is running ──
+
+    # ── shutdown ──
+    log.info("Miniatur IaaS API shutting down")
+
+
+# ── App ───────────────────────────────────────────────────────
+app = FastAPI(
+    title="Miniatur IaaS API",
+    description="Infrastructure as a Service — Jetson Nano",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+    allow_credentials=True,
+)
+
+# ── Register routers ─────────────────────────────────────────
+app.include_router(auth_router)
+app.include_router(compute_router)
+app.include_router(network_router)
+app.include_router(storage_router)
+app.include_router(monitoring_router)

@@ -38,6 +38,7 @@ from models import (
 from schemas import ExecCommand, InstanceAction, InstanceCreate, SnapshotCreate
 
 log = logging.getLogger("iaas.compute")
+audit = logging.getLogger("iaas.audit")
 
 router = APIRouter(tags=["Compute"])
 
@@ -158,6 +159,8 @@ def create_instance(body: InstanceCreate, bg: BackgroundTasks,
         network.id if network else None,
         ssh_port,
     )
+    audit.info("INSTANCE_CREATE user=%s instance=%s name=%s type=%s",
+               user.username, iid[:8], body.name, body.instance_type)
     return {"message": "Instance sedang dibuat", "instance_id": iid, "status": "pending"}
 
 
@@ -270,6 +273,8 @@ def instance_action(iid: str, body: InstanceAction,
 
     inst.updated_at = datetime.utcnow()
     db.commit()
+    audit.info("INSTANCE_%s user=%s instance=%s",
+               action.upper(), user.username, iid[:8])
     return {"message": f"Action '{action}' berhasil", "status": inst.status}
 
 

@@ -99,6 +99,7 @@ export const computeApi = {
   listInstances: () => request("/instances"),
   createInstance: (payload) => request("/instances", { method: "POST", body: payload }),
   getInstance: (id) => request(`/instances/${id}`),
+  getInstanceStatus: (id) => request(`/instances/${id}/status`),
   action: (id, action) =>
     request(`/instances/${id}/action`, { method: "POST", body: { action } }),
   exec: (id, command) =>

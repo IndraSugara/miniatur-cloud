@@ -48,7 +48,7 @@ export const networkView = {
               </tr>
             </thead>
             <tbody id="network-body">
-              <tr><td colspan="6" class="dim">Loading...</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
             </tbody>
           </table>
         </div>
@@ -87,7 +87,7 @@ export const networkView = {
               </tr>
             </thead>
             <tbody id="fip-body">
-              <tr><td colspan="5" class="dim">Loading...</td></tr>
+              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat…</td></tr>
             </tbody>
           </table>
         </div>

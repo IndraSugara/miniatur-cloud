@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -13,6 +14,7 @@ from models import User
 from schemas import UserRegister
 
 router = APIRouter(tags=["Auth"])
+audit = logging.getLogger("iaas.audit")
 
 
 @router.post("/auth/register")
@@ -26,6 +28,7 @@ def register(body: UserRegister, db: Session = Depends(get_db)):
     )
     db.add(user)
     db.commit()
+    audit.info("USER_REGISTER user=%s", body.username)
     return {"message": "Registrasi berhasil", "username": body.username}
 
 
@@ -36,10 +39,12 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         raise HTTPException(429, "Terlalu banyak percobaan login. Coba lagi nanti.")
     user = db.query(User).filter(User.username == form.username).first()
     if not user or not verify_password(form.password, user.hashed_password):
+        audit.warning("LOGIN_FAIL user=%s", form.username)
         raise HTTPException(401, "Username atau password salah")
     r = get_redis()
     if r:
         r.delete(rl_key)
+    audit.info("LOGIN_OK user=%s", user.username)
     return {"access_token": create_token({"sub": user.username}), "token_type": "bearer"}
 
 
