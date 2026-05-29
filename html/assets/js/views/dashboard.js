@@ -1,5 +1,10 @@
 import { REFRESH_MS } from "../config.js";
-import { clampPercent, escapeHtml, statusClass, toLocalDate } from "../utils.js";
+import {
+  clampPercent,
+  escapeHtml,
+  statusClass,
+  toLocalDate,
+} from "../utils.js";
 
 export const dashboardView = {
   id: "dashboard",

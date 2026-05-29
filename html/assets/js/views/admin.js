@@ -10,7 +10,9 @@ function renderCurrentUser(user) {
   const email = escapeHtml(user?.email || "-");
   const quota = escapeHtml(user?.quota_instances ?? "-");
   const userId = escapeHtml(user?.id || "-");
-  const role = user?.is_admin ? '<span class="badge-admin">admin</span>' : "user";
+  const role = user?.is_admin
+    ? '<span class="badge-admin">admin</span>'
+    : "user";
   return `
     <div>Username: <strong>${username}</strong></div>
     <div>Email: <strong>${email}</strong></div>
@@ -113,22 +115,24 @@ export const adminView = {
       }
     }
 
-    root.querySelector("#register-user-form").addEventListener("submit", async (event) => {
-      event.preventDefault();
-      const payload = {
-        username: root.querySelector("#reg-username").value.trim(),
-        email: root.querySelector("#reg-email").value.trim(),
-        password: root.querySelector("#reg-password").value,
-      };
-      try {
-        await apis.auth.register(payload);
-        toast("User berhasil didaftarkan.");
-        event.target.reset();
-        await load();
-      } catch (error) {
-        toast(message(error), "error");
-      }
-    });
+    root
+      .querySelector("#register-user-form")
+      .addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const payload = {
+          username: root.querySelector("#reg-username").value.trim(),
+          email: root.querySelector("#reg-email").value.trim(),
+          password: root.querySelector("#reg-password").value,
+        };
+        try {
+          await apis.auth.register(payload);
+          toast("User berhasil didaftarkan.");
+          event.target.reset();
+          await load();
+        } catch (error) {
+          toast(message(error), "error");
+        }
+      });
 
     await load();
     return () => {};
