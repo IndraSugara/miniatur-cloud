@@ -28,7 +28,7 @@ services:
     environment:
       MINIO_ROOT_USER: admin
       MINIO_ROOT_PASSWORD: CloudPass2024!
-      MINIO_BROWSER_REDIRECT_URL: http://192.168.1.2/storage-console/
+      MINIO_BROWSER_REDIRECT_URL: https://app.sughara.my.id/storage-console/
     networks:
       - cloud-net
     mem_limit: 256m
@@ -104,7 +104,7 @@ services:
       - prometheus-data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
-      - '--web.external-url=http://192.168.1.2/metrics/'
+      - '--web.external-url=https://app.sughara.my.id/metrics/'
       - '--web.route-prefix=/'
     networks:
       - cloud-net
@@ -124,7 +124,7 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SERVER_ROOT_URL: http://192.168.1.2/monitor/
+      GF_SERVER_ROOT_URL: https://app.sughara.my.id/monitor/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
     networks:
       - cloud-net
