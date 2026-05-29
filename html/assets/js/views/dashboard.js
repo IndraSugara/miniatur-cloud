@@ -1,4 +1,4 @@
-import { REFRESH_MS } from "../config.js";
+﻿import { REFRESH_MS } from "../config.js";
 import {
   clampPercent,
   escapeHtml,
@@ -148,10 +148,10 @@ export const dashboardView = {
             (item) => `
               <tr>
                 <td>${escapeHtml(item.name)}</td>
-                <td><span class="status ${statusClass(item.status)}">${item.status}</span></td>
+                <td><span class="status ${statusClass(item.status)}">${item.status}</span>${item.status_detail && item.status !== "running" && item.status !== "terminated" ? `<div class="dim" style="font-size:0.7rem;">${escapeHtml(item.status_detail)}</div>` : ""}</td>
                 <td>${escapeHtml(item.image)}</td>
                 <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
-                <td class="mono">${escapeHtml(item.network_id || "-")}</td>
+                <td class="mono">${escapeHtml(item.network_id ? item.network_id.slice(0,8)+"..." : "-")}</td>
                 <td>${toLocalDate(item.created_at)}</td>
               </tr>
             `,

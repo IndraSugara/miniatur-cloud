@@ -15,16 +15,23 @@ if _raw_secret in _PLACEHOLDERS:
 else:
     SECRET_KEY = _raw_secret
 ALGORITHM    = "HS256"
-TOKEN_EXPIRE = 60
-DB_URL       = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./iaas.db")
-DB_SYNC_URL  = DB_URL.replace("aiosqlite", "pysqlite").replace("+aiosqlite", "")
+TOKEN_EXPIRE = 480          # 8 hours — closer to AWS console sessions
+REFRESH_TOKEN_EXPIRE = 10080  # 7 days
 
+# ── Database ──────────────────────────────────────────────────
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://clouduser:CloudPass2024!@cloud-db:5432/clouddb",
+)
+
+# ── MinIO / S3 ────────────────────────────────────────────────
 MINIO_ENDPOINT   = os.getenv("MINIO_ENDPOINT", "cloud-storage:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY", "admin")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY", "CloudPass2024!")
 MINIO_SECURE     = os.getenv("MINIO_SECURE", "false").lower() in ("1", "true", "yes")
 BUCKET_NAME_RE   = re.compile(r"^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$")
 
+# ── Networking ────────────────────────────────────────────────
 PUBLIC_HOST      = os.getenv("PUBLIC_HOST", "192.168.1.2")
 FLOATING_PORT_START = int(os.getenv("FLOATING_PORT_START", "2300"))
 FLOATING_PORT_END   = int(os.getenv("FLOATING_PORT_END", "2399"))

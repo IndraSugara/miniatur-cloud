@@ -28,6 +28,7 @@ const elements = {
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   monitorBtn: document.getElementById("open-monitor"),
   storageBtn: document.getElementById("open-storage"),
+  docsBtn: document.getElementById("open-docs"),
 };
 
 function setLoggedOutUI() {
@@ -155,6 +156,9 @@ elements.monitorBtn.addEventListener("click", () => {
 });
 elements.storageBtn.addEventListener("click", () => {
   window.open("/storage-console/", "_blank", "noopener");
+});
+elements.docsBtn.addEventListener("click", () => {
+  window.open("/api/docs", "_blank", "noopener");
 });
 
 async function init() {

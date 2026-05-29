@@ -1,13 +1,23 @@
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
-from typing import Optional, List
+import re
+from pydantic import BaseModel, Field, field_validator
+from typing import Optional, List, Dict
 
 
 class UserRegister(BaseModel):
     username: str = Field(..., min_length=3, max_length=32)
     email:    str
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
+
+    @field_validator("password")
+    @classmethod
+    def strong_password(cls, v: str) -> str:
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password harus mengandung minimal 1 huruf besar")
+        if not re.search(r"[0-9]", v):
+            raise ValueError("Password harus mengandung minimal 1 angka")
+        return v
 
 
 class InstanceCreate(BaseModel):
@@ -17,11 +27,16 @@ class InstanceCreate(BaseModel):
     network_id    : Optional[str] = None
     volume_ids    : Optional[List[str]] = None
     security_group_id: Optional[str] = None
-    floating_ip_id: Optional[str] = None
+    public_endpoint_id: Optional[str] = None
+    tags          : Optional[Dict[str, str]] = None
 
 
 class InstanceAction(BaseModel):
     action: str  # start | stop | reboot | terminate
+
+
+class InstanceTagsUpdate(BaseModel):
+    tags: Dict[str, str] = Field(default_factory=dict)
 
 
 class ExecCommand(BaseModel):
@@ -70,11 +85,11 @@ class SnapshotCreate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=128)
 
 
-class FloatingIPCreate(BaseModel):
+class PublicEndpointCreate(BaseModel):
     instance_id: Optional[str] = None
 
 
-class FloatingIPAttach(BaseModel):
+class PublicEndpointAttach(BaseModel):
     instance_id: str
 
 

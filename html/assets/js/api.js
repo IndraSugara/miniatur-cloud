@@ -1,4 +1,4 @@
-import { API_BASE, TOKEN_KEY } from "./config.js";
+import { API_BASE, TOKEN_KEY, REFRESH_TOKEN_KEY } from "./config.js";
 
 function readToken() {
   return localStorage.getItem(TOKEN_KEY);
@@ -8,12 +8,25 @@ function writeToken(token) {
   localStorage.setItem(TOKEN_KEY, token);
 }
 
-function clearToken() {
+function readRefreshToken() {
+  return localStorage.getItem(REFRESH_TOKEN_KEY);
+}
+
+function writeRefreshToken(token) {
+  localStorage.setItem(REFRESH_TOKEN_KEY, token);
+}
+
+function clearTokens() {
   localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 function normalizeError(payload, fallback) {
   if (!payload) return fallback;
+  // Structured bilingual error: {"error": {"code": "...", "message": "..."}}
+  if (payload.detail && typeof payload.detail === "object" && payload.detail.message) {
+    return payload.detail.message;
+  }
   if (typeof payload.detail === "string") return payload.detail;
   if (Array.isArray(payload.detail) && payload.detail.length > 0) {
     const first = payload.detail[0];
@@ -22,6 +35,45 @@ function normalizeError(payload, fallback) {
   }
   if (typeof payload.message === "string") return payload.message;
   return fallback;
+}
+
+/** Extract machine-readable error code from structured error. */
+function extractErrorCode(payload) {
+  if (payload?.detail?.code) return payload.detail.code;
+  return null;
+}
+
+let _isRefreshing = false;
+let _refreshPromise = null;
+
+async function tryRefresh() {
+  if (_isRefreshing) return _refreshPromise;
+  const rt = readRefreshToken();
+  if (!rt) return false;
+
+  _isRefreshing = true;
+  _refreshPromise = (async () => {
+    try {
+      const res = await fetch(`${API_BASE}/auth/refresh`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ refresh_token: rt }),
+      });
+      if (!res.ok) return false;
+      const data = await res.json();
+      if (data.access_token) {
+        writeToken(data.access_token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    } finally {
+      _isRefreshing = false;
+      _refreshPromise = null;
+    }
+  })();
+  return _refreshPromise;
 }
 
 async function request(path, { method = "GET", body, auth = true, headers = {} } = {}) {
@@ -38,11 +90,26 @@ async function request(path, { method = "GET", body, auth = true, headers = {} }
     payload = JSON.stringify(body);
   }
 
-  const response = await fetch(`${API_BASE}${path}`, {
+  let response = await fetch(`${API_BASE}${path}`, {
     method,
     headers: finalHeaders,
     body: payload,
   });
+
+  // Auto-refresh on 401
+  if (response.status === 401 && auth) {
+    const refreshed = await tryRefresh();
+    if (refreshed) {
+      // Retry with new token
+      const newToken = readToken();
+      finalHeaders.Authorization = `Bearer ${newToken}`;
+      response = await fetch(`${API_BASE}${path}`, {
+        method,
+        headers: finalHeaders,
+        body: payload,
+      });
+    }
+  }
 
   const contentType = response.headers.get("content-type") || "";
   const parsed = contentType.includes("application/json")
@@ -58,7 +125,7 @@ async function request(path, { method = "GET", body, auth = true, headers = {} }
 
 export const auth = {
   hasToken: () => Boolean(readToken()),
-  clear: () => clearToken(),
+  clear: () => clearTokens(),
   async login(username, password) {
     const form = new URLSearchParams();
     form.set("username", username);
@@ -70,6 +137,9 @@ export const auth = {
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
     });
     writeToken(result.access_token);
+    if (result.refresh_token) {
+      writeRefreshToken(result.refresh_token);
+    }
     return result;
   },
   me() {
@@ -100,6 +170,9 @@ export const computeApi = {
   createInstance: (payload) => request("/instances", { method: "POST", body: payload }),
   getInstance: (id) => request(`/instances/${id}`),
   getInstanceStatus: (id) => request(`/instances/${id}/status`),
+  getInstanceLogs: (id, tail = 100) => request(`/instances/${id}/logs?tail=${tail}`),
+  updateTags: (id, tags) =>
+    request(`/instances/${id}/tags`, { method: "PATCH", body: { tags } }),
   action: (id, action) =>
     request(`/instances/${id}/action`, { method: "POST", body: { action } }),
   exec: (id, command) =>
@@ -128,13 +201,14 @@ export const networkApi = {
     request(`/security-groups/${id}/rules`, { method: "POST", body: payload }),
   deleteSecurityGroupRule: (id, ruleId) =>
     request(`/security-groups/${id}/rules/${ruleId}`, { method: "DELETE" }),
-  listFloatingIps: () => request("/floating-ips"),
-  createFloatingIp: (instanceId = null) =>
-    request("/floating-ips", { method: "POST", body: { instance_id: instanceId } }),
-  attachFloatingIp: (id, instanceId) =>
-    request(`/floating-ips/${id}/attach`, { method: "POST", body: { instance_id: instanceId } }),
-  detachFloatingIp: (id) => request(`/floating-ips/${id}/detach`, { method: "POST" }),
-  deleteFloatingIp: (id) => request(`/floating-ips/${id}`, { method: "DELETE" }),
+  // Public Endpoints (formerly Floating IPs)
+  listPublicEndpoints: () => request("/public-endpoints"),
+  createPublicEndpoint: (instanceId = null) =>
+    request("/public-endpoints", { method: "POST", body: { instance_id: instanceId } }),
+  attachPublicEndpoint: (id, instanceId) =>
+    request(`/public-endpoints/${id}/attach`, { method: "POST", body: { instance_id: instanceId } }),
+  detachPublicEndpoint: (id) => request(`/public-endpoints/${id}/detach`, { method: "POST" }),
+  deletePublicEndpoint: (id) => request(`/public-endpoints/${id}`, { method: "DELETE" }),
 };
 
 export const storageApi = {

@@ -1,4 +1,4 @@
-import { REFRESH_MS } from "../config.js";
+ï»¿import { REFRESH_MS } from "../config.js";
 import { escapeHtml, toLocalDate } from "../utils.js";
 import { showModal, toast } from "../ui.js";
 
@@ -37,7 +37,7 @@ export const storageView = {
               </tr>
             </thead>
             <tbody id="volume-body">
-              <tr><td colspan="7" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+              <tr><td colspan="7" class="dim"><span class="spinner"></span> Memuatï¿½</td></tr>
             </tbody>
           </table>
         </div>
@@ -62,7 +62,7 @@ export const storageView = {
               </tr>
             </thead>
             <tbody id="bucket-body">
-              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuatï¿½</td></tr>
             </tbody>
           </table>
         </div>
@@ -260,7 +260,7 @@ export const storageView = {
           bodyHtml: `
             <div class="grid grid-2">
               <div>
-                <label class="field-label" for="vol-attach-inst">Instance</label>
+                <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">Instance akan restart sebentar. Software yang terinstall akan tetap tersimpan.</p><label class="field-label" for="vol-attach-inst">Instance</label>
                 <select id="vol-attach-inst">${optionsHtml}</select>
               </div>
               <div>
@@ -278,7 +278,7 @@ export const storageView = {
                 const mountPath = modal.wrapper.querySelector("#vol-attach-path").value.trim() || undefined;
                 try {
                   await apis.storage.attachVolume(attachId, { instance_id: instanceId, mount_path: mountPath });
-                  toast("Volume terpasang.");
+                  toast("Volume terpasang. Instance di-restart untuk menerapkan perubahan.");
                   close();
                   await loadAll();
                 } catch (error) {
@@ -300,7 +300,7 @@ export const storageView = {
         }
         try {
           await apis.storage.detachVolume(volumeId, { instance_id: instanceId });
-          toast("Volume dilepas.");
+          toast("Volume dilepas. Instance di-restart untuk menerapkan perubahan.");
           await loadAll();
         } catch (error) {
           toast(em(error), "error");

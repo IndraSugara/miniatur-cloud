@@ -193,7 +193,7 @@ services:
       - ./iaas-api:/app
     environment:
       SECRET_KEY: iaas-jetson-rahasia-ganti-ini
-      DATABASE_URL: sqlite:///./iaas.db
+      DATABASE_URL: postgresql://clouduser:CloudPass2024!@cloud-db:5432/clouddb
       PYTHONDONTWRITEBYTECODE: "1"
       MINIO_ENDPOINT: cloud-storage:9000
       MINIO_ACCESS_KEY: admin
@@ -207,5 +207,6 @@ services:
       - cloud-net
     depends_on:
       - redis
+      - postgres
     mem_limit: 256m
     restart: unless-stopped

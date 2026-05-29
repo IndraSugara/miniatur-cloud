@@ -3,13 +3,28 @@ from __future__ import annotations
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from cache import check_rate_limit, get_redis
 from database import get_db
-from deps import create_token, get_current_user, hash_password, require_admin, verify_password
+from deps import (
+    create_token,
+    create_refresh_token,
+    decode_refresh_token,
+    get_current_user,
+    hash_password,
+    require_admin,
+    verify_password,
+)
+from errors import (
+    invalid_credentials,
+    rate_limited,
+    already_exists,
+    not_found,
+)
 from models import User
 from schemas import UserRegister
 
@@ -17,10 +32,14 @@ router = APIRouter(tags=["Auth"])
 audit = logging.getLogger("iaas.audit")
 
 
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
 @router.post("/auth/register")
 def register(body: UserRegister, db: Session = Depends(get_db)):
     if db.query(User).filter(User.username == body.username).first():
-        raise HTTPException(409, "Username sudah dipakai")
+        already_exists("Username")
     user = User(
         id=str(uuid.uuid4()), username=body.username,
         email=body.email,
@@ -36,16 +55,33 @@ def register(body: UserRegister, db: Session = Depends(get_db)):
 def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     rl_key = f"rl:auth:{form.username}"
     if check_rate_limit(rl_key, max_attempts=10, window=60):
-        raise HTTPException(429, "Terlalu banyak percobaan login. Coba lagi nanti.")
+        rate_limited()
     user = db.query(User).filter(User.username == form.username).first()
     if not user or not verify_password(form.password, user.hashed_password):
         audit.warning("LOGIN_FAIL user=%s", form.username)
-        raise HTTPException(401, "Username atau password salah")
+        invalid_credentials()
     r = get_redis()
     if r:
         r.delete(rl_key)
     audit.info("LOGIN_OK user=%s", user.username)
-    return {"access_token": create_token({"sub": user.username}), "token_type": "bearer"}
+    return {
+        "access_token": create_token({"sub": user.username}),
+        "refresh_token": create_refresh_token({"sub": user.username}),
+        "token_type": "bearer",
+    }
+
+
+@router.post("/auth/refresh")
+def refresh(body: RefreshRequest, db: Session = Depends(get_db)):
+    """Exchange a valid refresh token for a new access token."""
+    username = decode_refresh_token(body.refresh_token)
+    user = db.query(User).filter(User.username == username).first()
+    if not user:
+        not_found("User")
+    return {
+        "access_token": create_token({"sub": user.username}),
+        "token_type": "bearer",
+    }
 
 
 @router.get("/auth/me")

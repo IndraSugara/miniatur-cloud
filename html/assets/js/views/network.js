@@ -1,6 +1,6 @@
-import { REFRESH_MS } from "../config.js";
-import { escapeHtml, statusClass, toLocalDate } from "../utils.js";
-import { toast } from "../ui.js";
+ï»¿import { REFRESH_MS } from "../config.js";
+import { escapeHtml, statusClass } from "../utils.js";
+import { showModal, toast } from "../ui.js";
 
 function errMsg(error) {
   return error instanceof Error ? error.message : String(error);
@@ -9,7 +9,7 @@ function errMsg(error) {
 export const networkView = {
   id: "network",
   title: "Network",
-  subtitle: "Kelola network, security group, floating IP, dan relasi ke instance.",
+  subtitle: "Kelola network, security group, dan public endpoint.",
   async mount(root, { apis }) {
     root.innerHTML = `
       <section class="panel">
@@ -17,17 +17,17 @@ export const networkView = {
         <form id="network-form" class="grid grid-3">
           <div>
             <label class="field-label" for="network-name">Name</label>
-            <input id="network-name" required placeholder="team-net" />
+            <input id="network-name" required placeholder="my-net" />
           </div>
           <div>
             <label class="field-label" for="network-cidr">CIDR (optional)</label>
-            <input id="network-cidr" placeholder="172.30.0.0/16" />
+            <input id="network-cidr" placeholder="10.10.0.0/24" />
           </div>
           <div>
             <label class="field-label" for="network-gateway">Gateway (optional)</label>
-            <input id="network-gateway" placeholder="172.30.0.1" />
+            <input id="network-gateway" placeholder="10.10.0.1" />
           </div>
-          <div style="grid-column:1/-1;">
+          <div style="grid-column:1/-1;" class="toolbar">
             <button class="btn btn-primary" type="submit">Create Network</button>
           </div>
         </form>
@@ -38,56 +38,42 @@ export const networkView = {
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Name</th>
-                <th>CIDR</th>
-                <th>Gateway</th>
-                <th>Default</th>
-                <th>Created</th>
-                <th>Action</th>
-              </tr>
+              <tr><th>Name</th><th>CIDR</th><th>Gateway</th><th>Default</th><th>Action</th></tr>
             </thead>
             <tbody id="network-body">
-              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
-          <h3>Security Groups</h3>
-          <form id="sg-create-form" class="toolbar">
-            <input id="sg-name" placeholder="web-sg" required />
-            <button class="btn btn-inline btn-primary" type="submit">Create SG</button>
-          </form>
-        </div>
-        <div id="sg-list" class="grid"></div>
+        <h3>Security Groups</h3>
+        <form id="sg-create-form" class="toolbar" style="margin-bottom:12px;">
+          <input id="sg-name" placeholder="Nama SG baru" required />
+          <button class="btn btn-primary" type="submit">Create</button>
+        </form>
+        <div id="sg-list"></div>
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
-          <h3>Floating IP</h3>
-          <form id="fip-create-form" class="toolbar">
-            <select id="fip-instance">
-              <option value="">Allocate only</option>
-            </select>
-            <button class="btn btn-inline btn-primary" type="submit">Allocate</button>
-          </form>
-        </div>
+        <h3>Public Endpoints</h3>
+        <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">
+          Port forwards from host IP to container SSH port.
+        </p>
+        <form id="ep-create-form" class="toolbar" style="margin-bottom:12px;">
+          <select id="ep-instance-select">
+            <option value="">Allocate only</option>
+          </select>
+          <button class="btn btn-primary" type="submit">Allocate Endpoint</button>
+        </form>
         <div class="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th>Address</th>
-                <th>Status</th>
-                <th>Instance</th>
-                <th>Created</th>
-                <th>Action</th>
-              </tr>
+              <tr><th>Public IP</th><th>Port</th><th>Instance</th><th>Status</th><th>Actions</th></tr>
             </thead>
-            <tbody id="fip-body">
-              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat…</td></tr>
+            <tbody id="ep-body">
+              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>
@@ -96,35 +82,32 @@ export const networkView = {
 
     const networkBody = root.querySelector("#network-body");
     const sgList = root.querySelector("#sg-list");
-    const fipBody = root.querySelector("#fip-body");
-    const fipInstanceSelect = root.querySelector("#fip-instance");
+    const epBody = root.querySelector("#ep-body");
+    const epInstanceSelect = root.querySelector("#ep-instance-select");
 
     let networks = [];
     let securityGroups = [];
-    let floatingIps = [];
+    let publicEndpoints = [];
     let instances = [];
 
     function renderNetworks() {
       if (networks.length === 0) {
-        networkBody.innerHTML = `<tr><td colspan="6" class="dim">Belum ada network.</td></tr>`;
+        networkBody.innerHTML = `<tr><td colspan="5" class="dim">Belum ada network.</td></tr>`;
         return;
       }
       networkBody.innerHTML = networks
         .map(
-          (item) => `
+          (n) => `
             <tr>
-              <td>${escapeHtml(item.name)}</td>
-              <td class="mono">${escapeHtml(item.cidr || "-")}</td>
-              <td class="mono">${escapeHtml(item.gateway || "-")}</td>
-              <td>${item.is_default ? "yes" : "no"}</td>
-              <td>${toLocalDate(item.created_at)}</td>
-              <td>
-                <button class="btn btn-inline btn-danger" data-network-delete="${item.id}" ${
-                  item.is_default ? "disabled" : ""
-                }>
-                  Delete
-                </button>
-              </td>
+              <td>${escapeHtml(n.name)}</td>
+              <td class="mono">${escapeHtml(n.cidr || "-")}</td>
+              <td class="mono">${escapeHtml(n.gateway || "-")}</td>
+              <td>${n.is_default ? "Yes" : ""}</td>
+              <td>${
+                n.is_default
+                  ? '<span class="dim">-</span>'
+                  : `<button class="btn btn-inline btn-danger" data-network-delete="${n.id}">Delete</button>`
+              }</td>
             </tr>
           `,
         )
@@ -137,77 +120,78 @@ export const networkView = {
         return;
       }
       sgList.innerHTML = securityGroups
-        .map((item) => {
-          const rules = item.rules || [];
-          const ruleRows =
-            rules.length === 0
-              ? `<tr><td colspan="4" class="dim">No rules</td></tr>`
-              : rules
-                  .map(
-                    (rule) => `
-                      <tr>
-                        <td>${escapeHtml(rule.protocol)}</td>
-                        <td>${escapeHtml(rule.port_min)}-${escapeHtml(rule.port_max)}</td>
-                        <td>${escapeHtml(rule.cidr)}</td>
-                        <td><button class="btn btn-inline btn-danger" data-rule-delete="${item.id}|${rule.id}">Delete</button></td>
-                      </tr>
-                    `,
-                  )
-                  .join("");
-
+        .map((sg) => {
+          const rules = (sg.rules || [])
+            .map(
+              (r) => `
+                <tr>
+                  <td>${escapeHtml(r.direction)}</td>
+                  <td>${escapeHtml(r.protocol)}</td>
+                  <td class="mono">${r.port_min}-${r.port_max}</td>
+                  <td class="mono">${escapeHtml(r.cidr)}</td>
+                  <td>
+                    ${sg.is_default ? "" : `<button class="btn btn-inline btn-danger" data-rule-delete="${sg.id}|${r.id}" style="font-size:0.75rem;">x</button>`}
+                  </td>
+                </tr>
+              `,
+            )
+            .join("");
           return `
-            <div class="panel">
+            <div class="panel" style="margin-bottom:8px;padding:10px;">
               <div class="toolbar" style="justify-content:space-between;">
-                <strong>${escapeHtml(item.name)} ${item.is_default ? '<span class="chip">default</span>' : ""}</strong>
+                <strong>${escapeHtml(sg.name)}${sg.is_default ? " [default]" : ""}</strong>
                 <div class="actions">
-                  <button class="btn btn-inline" data-rule-add="${item.id}">Add Rule</button>
-                  <button class="btn btn-inline btn-danger" data-sg-delete="${item.id}" ${
-                    item.is_default ? "disabled" : ""
-                  }>Delete SG</button>
+                  <button class="btn btn-inline" data-rule-add="${sg.id}">Add Rule</button>
+                  ${sg.is_default ? "" : `<button class="btn btn-inline btn-danger" data-sg-delete="${sg.id}">Delete</button>`}
                 </div>
               </div>
-              <div class="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Protocol</th>
-                      <th>Port Range</th>
-                      <th>CIDR</th>
-                      <th>Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>${ruleRows}</tbody>
-                </table>
-              </div>
+              ${
+                rules
+                  ? `<table style="margin-top:8px;"><thead><tr><th>Dir</th><th>Proto</th><th>Ports</th><th>CIDR</th><th></th></tr></thead><tbody>${rules}</tbody></table>`
+                  : '<div class="dim" style="margin-top:8px;">No rules</div>'
+              }
             </div>
           `;
         })
         .join("");
     }
 
-    function renderFloatingIps() {
-      if (floatingIps.length === 0) {
-        fipBody.innerHTML = `<tr><td colspan="5" class="dim">Belum ada floating IP.</td></tr>`;
+    function resolveInstanceName(instanceId) {
+      if (!instanceId) return "-";
+      const inst = instances.find((i) => i.id === instanceId);
+      return inst ? inst.name : instanceId.slice(0, 8) + "...";
+    }
+
+    function renderPublicEndpoints() {
+      if (publicEndpoints.length === 0) {
+        epBody.innerHTML = `<tr><td colspan="5" class="dim">Belum ada public endpoint.</td></tr>`;
         return;
       }
-      fipBody.innerHTML = floatingIps
+      epBody.innerHTML = publicEndpoints
         .map(
-          (item) => `
+          (ep) => `
             <tr>
-              <td class="mono">${escapeHtml(item.public_ip)}:${escapeHtml(item.public_port)}</td>
-              <td><span class="status ${statusClass(item.status)}">${item.status}</span></td>
-              <td class="mono">${escapeHtml(item.instance_id || "-")}</td>
-              <td>${toLocalDate(item.created_at)}</td>
+              <td class="mono">${escapeHtml(ep.public_ip)}</td>
+              <td class="mono">${ep.public_port}</td>
+              <td>${escapeHtml(resolveInstanceName(ep.instance_id))}</td>
+              <td><span class="status ${statusClass(ep.status)}">${ep.status}</span></td>
               <td>
                 <div class="actions">
                   ${
-                    item.status === "available"
-                      ? `<button class="btn btn-inline" data-fip-attach="${item.id}">Attach</button>`
-                      : `<button class="btn btn-inline" data-fip-detach="${item.id}">Detach</button>`
+                    ep.status === "available"
+                      ? `<button class="btn btn-inline" data-ep-attach="${ep.id}">Attach</button>`
+                      : ""
                   }
-                  <button class="btn btn-inline btn-danger" data-fip-delete="${item.id}" ${
-                    item.status !== "available" ? "disabled" : ""
-                  }>Delete</button>
+                  ${
+                    ep.instance_id
+                      ? `<button class="btn btn-inline" data-ep-detach="${ep.id}">Detach</button>`
+                      : ""
+                  }
+                  ${
+                    ep.status === "available"
+                      ? `<button class="btn btn-inline btn-danger" data-ep-delete="${ep.id}">Delete</button>`
+                      : ""
+                  }
                 </div>
               </td>
             </tr>
@@ -216,29 +200,29 @@ export const networkView = {
         .join("");
     }
 
-    function renderFipInstanceChoices() {
+    function renderEpInstanceChoices() {
       const rows = instances
         .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()))
         .map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${escapeHtml(item.status)})</option>`)
         .join("");
-      fipInstanceSelect.innerHTML = `<option value="">Allocate only</option>${rows}`;
+      epInstanceSelect.innerHTML = `<option value="">Allocate only</option>${rows}`;
     }
 
     async function loadAll() {
-      const [netPayload, sgPayload, fipPayload, instancePayload] = await Promise.all([
+      const [netPayload, sgPayload, epPayload, instancePayload] = await Promise.all([
         apis.network.listNetworks(),
         apis.network.listSecurityGroups(),
-        apis.network.listFloatingIps(),
+        apis.network.listPublicEndpoints(),
         apis.compute.listInstances(),
       ]);
       networks = netPayload.networks || [];
       securityGroups = sgPayload.security_groups || [];
-      floatingIps = fipPayload.floating_ips || [];
+      publicEndpoints = epPayload.public_endpoints || [];
       instances = instancePayload.instances || [];
       renderNetworks();
       renderSecurityGroups();
-      renderFloatingIps();
-      renderFipInstanceChoices();
+      renderPublicEndpoints();
+      renderEpInstanceChoices();
     }
 
     root.querySelector("#network-form").addEventListener("submit", async (event) => {
@@ -274,12 +258,12 @@ export const networkView = {
       }
     });
 
-    root.querySelector("#fip-create-form").addEventListener("submit", async (event) => {
+    root.querySelector("#ep-create-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       try {
-        const instanceId = fipInstanceSelect.value || null;
-        await apis.network.createFloatingIp(instanceId);
-        toast("Floating IP dialokasikan.");
+        const instanceId = epInstanceSelect.value || null;
+        await apis.network.createPublicEndpoint(instanceId);
+        toast("Public endpoint dialokasikan.");
         await loadAll();
       } catch (error) {
         toast(errMsg(error), "error");
@@ -379,16 +363,16 @@ export const networkView = {
       }
     });
 
-    fipBody.addEventListener("click", async (event) => {
+    epBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
 
-      const deleteId = target.dataset.fipDelete;
+      const deleteId = target.dataset.epDelete;
       if (deleteId) {
-        if (!window.confirm("Delete floating IP ini?")) return;
+        if (!window.confirm("Delete public endpoint ini?")) return;
         try {
-          await apis.network.deleteFloatingIp(deleteId);
-          toast("Floating IP dihapus.");
+          await apis.network.deletePublicEndpoint(deleteId);
+          toast("Public endpoint dihapus.");
           await loadAll();
         } catch (error) {
           toast(errMsg(error), "error");
@@ -396,11 +380,11 @@ export const networkView = {
         return;
       }
 
-      const detachId = target.dataset.fipDetach;
+      const detachId = target.dataset.epDetach;
       if (detachId) {
         try {
-          await apis.network.detachFloatingIp(detachId);
-          toast("Floating IP dilepas.");
+          await apis.network.detachPublicEndpoint(detachId);
+          toast("Public endpoint dilepas.");
           await loadAll();
         } catch (error) {
           toast(errMsg(error), "error");
@@ -408,7 +392,7 @@ export const networkView = {
         return;
       }
 
-      const attachId = target.dataset.fipAttach;
+      const attachId = target.dataset.epAttach;
       if (attachId) {
         const choices = instances
           .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
@@ -420,20 +404,20 @@ export const networkView = {
           .map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${item.status})</option>`)
           .join("");
         const modal = showModal({
-          title: "Attach Floating IP",
+          title: "Attach Public Endpoint",
           bodyHtml: `
-            <label class="field-label" for="fip-target">Pilih Instance</label>
-            <select id="fip-target">${optionsHtml}</select>
+            <label class="field-label" for="ep-target">Pilih Instance</label>
+            <select id="ep-target">${optionsHtml}</select>
           `,
           actions: [
             {
               label: "Attach",
               className: "btn btn-primary",
               onClick: async ({ close }) => {
-                const instanceId = modal.wrapper.querySelector("#fip-target").value;
+                const instanceId = modal.wrapper.querySelector("#ep-target").value;
                 try {
-                  await apis.network.attachFloatingIp(attachId, instanceId);
-                  toast("Floating IP terpasang.");
+                  await apis.network.attachPublicEndpoint(attachId, instanceId);
+                  toast("Public endpoint terpasang.");
                   close();
                   await loadAll();
                 } catch (error) {
@@ -449,9 +433,7 @@ export const networkView = {
     await loadAll();
 
     const timer = window.setInterval(() => {
-      loadAll().catch(() => {
-        // ignore periodic refresh failure
-      });
+      loadAll().catch(() => {});
     }, REFRESH_MS);
 
     return () => window.clearInterval(timer);

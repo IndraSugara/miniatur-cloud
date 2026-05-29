@@ -63,7 +63,7 @@ async def lifespan(application: FastAPI):
 app = FastAPI(
     title="Miniatur IaaS API",
     description="Infrastructure as a Service — Jetson Nano",
-    version="1.0.0",
+    version="1.1.0",
     lifespan=lifespan,
 )
 

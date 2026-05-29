@@ -40,6 +40,10 @@ class Instance(Base):
     ip_address     = Column(String(15), nullable=True)
     ssh_port       = Column(Integer, nullable=True)
     ssh_password   = Column(String(32), nullable=True)
+    # ── New fields ────────────────────────────────────────────
+    status_detail  = Column(String(256), nullable=True)   # provisioning stage
+    error_message  = Column(Text, nullable=True)           # user-visible error
+    tags           = Column(Text, nullable=True)           # JSON-serialized dict
     created_at     = Column(DateTime, default=datetime.utcnow)
     updated_at     = Column(DateTime, default=datetime.utcnow)
 
@@ -89,8 +93,13 @@ class ObjectBucket(Base):
     owner_id   = Column(String(36), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class FloatingIP(Base):
-    __tablename__ = "floating_ips"
+class PublicEndpoint(Base):
+    """Formerly FloatingIP — renamed to set correct expectations.
+
+    Each public endpoint is a host-port mapping (192.168.1.2:<port>)
+    that forwards traffic to a container port.
+    """
+    __tablename__ = "public_endpoints"
     id           = Column(String(36), primary_key=True)
     owner_id     = Column(String(36), nullable=False)
     public_ip    = Column(String(64), nullable=False)

@@ -59,17 +59,54 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
 # ── Catalog & Health ──────────────────────────────────────────
 @router.get("/catalog/images", tags=["Catalog"])
 def list_images():
-    return {"images": list(AVAILABLE_IMAGES.keys())}
+    """Return image catalog with descriptions."""
+    return {
+        "images": [
+            {"key": key, "description": entry["description"]}
+            for key, entry in AVAILABLE_IMAGES.items()
+        ]
+    }
 
 
 @router.get("/catalog/instance-types", tags=["Catalog"])
 def list_types():
-    return {"instance_types": INSTANCE_TYPES}
+    """Return instance types with specs and descriptions."""
+    return {
+        "instance_types": {
+            key: {
+                "vcpu": val["vcpu"],
+                "memory_mb": val["memory_mb"],
+                "description": val["description"],
+            }
+            for key, val in INSTANCE_TYPES.items()
+        }
+    }
 
 
 @router.get("/health", tags=["System"])
 def health():
     return {"status": "ok", "service": "Miniatur IaaS", "time": datetime.utcnow().isoformat()}
+
+
+@router.get("/api-info", tags=["System"])
+def api_info():
+    """API information and useful links."""
+    return {
+        "service": "Miniatur IaaS API",
+        "version": "1.1.0",
+        "docs_url": "/api/docs",
+        "health_url": "/api/health",
+        "changes": [
+            "Bilingual error responses (code + message)",
+            "Refresh token support",
+            "Instance provisioning stages & error details",
+            "Container logs endpoint",
+            "Instance tags (key-value metadata)",
+            "Public Endpoints (formerly Floating IPs)",
+            "State-preserving volume/security-group changes",
+            "Enhanced catalog with descriptions",
+        ],
+    }
 
 
 @router.get("/", tags=["System"])

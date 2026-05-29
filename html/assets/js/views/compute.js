@@ -6,10 +6,17 @@ function extractMessage(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+function renderTags(tags) {
+  if (!tags || Object.keys(tags).length === 0) return '<span class="dim">—</span>';
+  return Object.entries(tags)
+    .map(([k, v]) => `<span class="chip mono" style="font-size:0.75rem;">${escapeHtml(k)}=${escapeHtml(v)}</span>`)
+    .join(" ");
+}
+
 export const computeView = {
   id: "compute",
   title: "Compute",
-  subtitle: "Kelola instance, tindakan lifecycle, SSH, exec, dan snapshot.",
+  subtitle: "Kelola instance, tindakan lifecycle, SSH, exec, logs, dan snapshot.",
   async mount(root, { apis }) {
     root.innerHTML = `
       <section class="panel">
@@ -40,10 +47,14 @@ export const computeView = {
             </select>
           </div>
           <div>
-            <label class="field-label" for="inst-fip">Floating IP (optional)</label>
-            <select id="inst-fip">
+            <label class="field-label" for="inst-ep">Public Endpoint (optional)</label>
+            <select id="inst-ep">
               <option value="">Auto SSH Port</option>
             </select>
+          </div>
+          <div style="grid-column:1/-1;">
+            <label class="field-label" for="inst-tags">Tags <span class="dim">(key=value, comma separated)</span></label>
+            <input id="inst-tags" placeholder="env=dev, project=demo" />
           </div>
           <div style="grid-column:1/-1;" class="toolbar">
             <button id="create-instance-btn" class="btn btn-primary" type="submit">Create Instance</button>
@@ -67,7 +78,7 @@ export const computeView = {
                 <th>Image</th>
                 <th>Type</th>
                 <th>Network</th>
-                <th>SSH/FIP</th>
+                <th>SSH/Endpoint</th>
                 <th>Created</th>
                 <th>Actions</th>
               </tr>
@@ -113,35 +124,54 @@ export const computeView = {
     const typeSelect = root.querySelector("#inst-type");
     const networkSelect = root.querySelector("#inst-network");
     const sgSelect = root.querySelector("#inst-sg");
-    const fipSelect = root.querySelector("#inst-fip");
+    const epSelect = root.querySelector("#inst-ep");
+    const tagsInput = root.querySelector("#inst-tags");
 
     let instances = [];
     let networkList = [];
     let securityGroups = [];
-    let floatingIps = [];
+    let publicEndpoints = [];
+
+    function parseTags(raw) {
+      if (!raw || !raw.trim()) return null;
+      const result = {};
+      raw.split(",").forEach((pair) => {
+        const [k, ...rest] = pair.split("=");
+        const key = (k || "").trim();
+        const val = rest.join("=").trim();
+        if (key) result[key] = val || "";
+      });
+      return Object.keys(result).length > 0 ? result : null;
+    }
 
     async function loadCreateDependencies() {
-      const [imagesPayload, typesPayload, netsPayload, sgsPayload, fipsPayload] = await Promise.all([
+      const [imagesPayload, typesPayload, netsPayload, sgsPayload, epsPayload] = await Promise.all([
         apis.catalog.images(),
         apis.catalog.types(),
         apis.network.listNetworks(),
         apis.network.listSecurityGroups(),
-        apis.network.listFloatingIps(),
+        apis.network.listPublicEndpoints(),
       ]);
       const images = imagesPayload.images || [];
       const types = typesPayload.instance_types || {};
       networkList = netsPayload.networks || [];
       securityGroups = sgsPayload.security_groups || [];
-      floatingIps = fipsPayload.floating_ips || [];
+      publicEndpoints = epsPayload.public_endpoints || [];
 
       imageSelect.innerHTML = images
-        .map((img) => `<option value="${img}">${img}</option>`)
+        .map((img) => {
+          const key = typeof img === "string" ? img : img.key;
+          const desc = typeof img === "object" && img.description ? ` — ${img.description}` : "";
+          return `<option value="${key}">${key}${desc}</option>`;
+        })
         .join("");
 
       typeSelect.innerHTML = Object.entries(types)
         .map(
-          ([key, value]) =>
-            `<option value="${key}">${key} (${value.vcpu} vCPU / ${value.memory_mb} MB)</option>`,
+          ([key, value]) => {
+            const desc = value.description ? ` — ${value.description}` : "";
+            return `<option value="${key}">${key} (${value.vcpu} vCPU / ${value.memory_mb} MB)${desc}</option>`;
+          },
         )
         .join("");
 
@@ -155,8 +185,8 @@ export const computeView = {
         (item) => `${item.name}${item.is_default ? " [default]" : ""}`,
         (item) => item.id,
       )}`;
-      fipSelect.innerHTML = `<option value="">Auto SSH Port</option>${createOptionList(
-        floatingIps.filter((ip) => ip.status === "available"),
+      epSelect.innerHTML = `<option value="">Auto SSH Port</option>${createOptionList(
+        publicEndpoints.filter((ep) => ep.status === "available"),
         (item) => `${item.public_ip}:${item.public_port}`,
         (item) => item.id,
       )}`;
@@ -166,6 +196,17 @@ export const computeView = {
       if (!networkId) return "-";
       const net = networkList.find((n) => n.id === networkId);
       return net ? net.name : networkId.slice(0, 8) + "…";
+    }
+
+    function renderStatusBadge(item) {
+      let badge = `<span class="status ${statusClass(item.status)}">${item.status}</span>`;
+      if (item.status_detail && item.status !== "running" && item.status !== "terminated") {
+        badge += `<div class="dim" style="font-size:0.75rem;margin-top:2px;">${escapeHtml(item.status_detail)}</div>`;
+      }
+      if (item.status === "error" && item.error_message) {
+        badge += `<div class="dim" style="font-size:0.7rem;color:var(--error);margin-top:2px;" title="${escapeHtml(item.error_message)}">${escapeHtml(item.error_message.slice(0, 40))}${item.error_message.length > 40 ? "…" : ""}</div>`;
+      }
+      return badge;
     }
 
     function renderInstances() {
@@ -178,15 +219,16 @@ export const computeView = {
           (item) => `
             <tr>
               <td>${escapeHtml(item.name)}</td>
-              <td><span class="status ${statusClass(item.status)}">${item.status}</span></td>
+              <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
               <td class="mono">${escapeHtml(resolveNetworkName(item.network_id))}</td>
-              <td class="mono">${escapeHtml(item.floating_ip || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
+              <td class="mono">${escapeHtml(item.public_endpoint || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
               <td>${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
                   <button class="btn btn-inline" data-action="detail" data-id="${item.id}">Detail</button>
+                  <button class="btn btn-inline" data-action="logs" data-id="${item.id}">Logs</button>
                   <button class="btn btn-inline" data-action="exec" data-id="${item.id}">Exec</button>
                   <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snapshot</button>
                   ${
@@ -251,12 +293,14 @@ export const computeView = {
         apis.network.listSecurityGroups(),
       ]);
       const modal = showModal({
-        title: `Instance Detail - ${escapeHtml(detail.name)}`,
+        title: `Instance Detail — ${escapeHtml(detail.name)}`,
         bodyHtml: `
           <div class="grid grid-2">
             <div>
               <div class="dim">Status</div>
               <div><span class="status ${statusClass(detail.status)}">${detail.status}</span></div>
+              ${detail.status_detail ? `<div class="dim" style="font-size:0.8rem;">${escapeHtml(detail.status_detail)}</div>` : ""}
+              ${detail.error_message ? `<div style="font-size:0.8rem;color:var(--error);">${escapeHtml(detail.error_message)}</div>` : ""}
             </div>
             <div>
               <div class="dim">Type</div>
@@ -275,12 +319,16 @@ export const computeView = {
               <div class="mono">${escapeHtml(detail.ssh_password || "-")}</div>
             </div>
             <div>
-              <div class="dim">Floating IP</div>
-              <div class="mono">${escapeHtml(detail.floating_ip || "-")}</div>
+              <div class="dim">Public Endpoint</div>
+              <div class="mono">${escapeHtml(detail.public_endpoint || "-")}</div>
             </div>
             <div>
               <div class="dim">vCPU / RAM</div>
               <div class="mono">${detail.vcpu || "-"} vCPU / ${detail.memory_mb || "-"} MB</div>
+            </div>
+            <div>
+              <div class="dim">Tags</div>
+              <div>${renderTags(detail.tags)}</div>
             </div>
           </div>
           <div id="instance-metrics" style="margin-top:12px;">
@@ -309,6 +357,14 @@ export const computeView = {
               <button id="modal-apply-sg" class="btn btn-inline" style="margin-top:8px;">Apply Security Group</button>
             </div>
           </div>
+          <hr style="border-color:var(--line);margin:14px 0;" />
+          <div>
+            <label class="field-label">Edit Tags <span class="dim">(key=value, comma separated)</span></label>
+            <input id="modal-tags-input" value="${escapeHtml(
+              detail.tags ? Object.entries(detail.tags).map(([k, v]) => `${k}=${v}`).join(", ") : ""
+            )}" />
+            <button id="modal-apply-tags" class="btn btn-inline" style="margin-top:8px;">Save Tags</button>
+          </div>
           <p id="modal-detail-message" class="message hidden" style="margin-top:10px;"></p>
         `,
       });
@@ -317,19 +373,19 @@ export const computeView = {
       const msg = modalRoot.querySelector("#modal-detail-message");
       const applyNetworkBtn = modalRoot.querySelector("#modal-apply-network");
       const applySgBtn = modalRoot.querySelector("#modal-apply-sg");
+      const applyTagsBtn = modalRoot.querySelector("#modal-apply-tags");
 
       // Fetch instance metrics asynchronously
       const metricsBox = modalRoot.querySelector("#instance-metrics");
       if (detail.status === "running") {
         apis.compute.getInstanceStatus(instanceId).then((stats) => {
           const cpuPct = stats.cpu_percent != null ? stats.cpu_percent.toFixed(1) : "N/A";
-          const memUsed = stats.memory_mb != null ? stats.memory_mb.toFixed(0) : "-";
-          const memLimit = stats.memory_limit_mb != null ? stats.memory_limit_mb.toFixed(0) : "-";
-          const memPct = (stats.memory_mb && stats.memory_limit_mb)
-            ? ((stats.memory_mb / stats.memory_limit_mb) * 100).toFixed(0) : 0;
-          const pids = stats.pids ?? "-";
+          const memUsed = stats.mem_usage_mb != null ? stats.mem_usage_mb.toFixed(0) : "-";
+          const memLimit = stats.mem_limit_mb != null ? stats.mem_limit_mb.toFixed(0) : "-";
+          const memPct = (stats.mem_usage_mb && stats.mem_limit_mb)
+            ? ((stats.mem_usage_mb / stats.mem_limit_mb) * 100).toFixed(0) : 0;
           metricsBox.innerHTML = `
-            <div class="grid grid-3" style="gap:8px;">
+            <div class="grid grid-2" style="gap:8px;">
               <div>
                 <div class="dim" style="font-size:0.75rem;">CPU</div>
                 <div class="mono">${cpuPct}%</div>
@@ -343,10 +399,6 @@ export const computeView = {
                 <div style="background:var(--panel-2);border-radius:4px;height:6px;margin-top:4px;">
                   <div style="width:${Math.min(memPct, 100)}%;height:100%;background:${memPct > 80 ? 'var(--warn)' : 'var(--ok)'};border-radius:4px;transition:width .3s;"></div>
                 </div>
-              </div>
-              <div>
-                <div class="dim" style="font-size:0.75rem;">PIDs</div>
-                <div class="mono">${pids}</div>
               </div>
             </div>
           `;
@@ -379,7 +431,29 @@ export const computeView = {
             await apis.compute.updateSecurityGroup(instanceId, selected);
           });
           msg.className = "message ok";
-          msg.textContent = "Security group berhasil diupdate.";
+          msg.textContent = "Security group berhasil diupdate. State preserved.";
+          await reloadAll();
+        } catch (error) {
+          msg.className = "message error";
+          msg.textContent = extractMessage(error);
+        }
+      });
+
+      applyTagsBtn.addEventListener("click", async () => {
+        try {
+          const raw = modalRoot.querySelector("#modal-tags-input").value;
+          const tags = {};
+          if (raw.trim()) {
+            raw.split(",").forEach((pair) => {
+              const [k, ...rest] = pair.split("=");
+              const key = (k || "").trim();
+              const val = rest.join("=").trim();
+              if (key) tags[key] = val || "";
+            });
+          }
+          await apis.compute.updateTags(instanceId, tags);
+          msg.className = "message ok";
+          msg.textContent = "Tags berhasil diupdate.";
           await reloadAll();
         } catch (error) {
           msg.className = "message error";
@@ -388,9 +462,46 @@ export const computeView = {
       });
     }
 
+    async function openLogsModal(instanceId) {
+      const modal = showModal({
+        title: `Container Logs — ${instanceId.slice(0, 8)}`,
+        bodyHtml: `
+          <div class="toolbar" style="margin-bottom:8px;">
+            <label class="field-label" style="margin:0;">Tail lines:</label>
+            <select id="log-tail" style="width:auto;margin-left:8px;">
+              <option value="50">50</option>
+              <option value="100" selected>100</option>
+              <option value="300">300</option>
+              <option value="500">500</option>
+            </select>
+            <button id="log-refresh" class="btn btn-inline btn-ghost" style="margin-left:8px;">Refresh</button>
+          </div>
+          <pre id="log-output" class="mono panel" style="min-height:200px;max-height:400px;overflow:auto;font-size:0.8rem;white-space:pre-wrap;"><span class="spinner"></span> Loading logs…</pre>
+        `,
+      });
+      const output = modal.wrapper.querySelector("#log-output");
+      const tailSelect = modal.wrapper.querySelector("#log-tail");
+      const refreshBtn = modal.wrapper.querySelector("#log-refresh");
+
+      async function loadLogs() {
+        output.innerHTML = '<span class="spinner"></span> Loading logs…';
+        try {
+          const result = await apis.compute.getInstanceLogs(instanceId, parseInt(tailSelect.value));
+          output.textContent = result.logs || "(no output)";
+          output.scrollTop = output.scrollHeight;
+        } catch (error) {
+          output.textContent = extractMessage(error);
+        }
+      }
+
+      await loadLogs();
+      refreshBtn.addEventListener("click", loadLogs);
+      tailSelect.addEventListener("change", loadLogs);
+    }
+
     async function openExecModal(instanceId) {
       const modal = showModal({
-        title: `Exec Command - ${instanceId.slice(0, 8)}`,
+        title: `Exec Command — ${instanceId.slice(0, 8)}`,
         bodyHtml: `
           <label class="field-label">Command</label>
           <input id="exec-command" value="uname -a" />
@@ -421,7 +532,9 @@ export const computeView = {
       };
       if (networkSelect.value) payload.network_id = networkSelect.value;
       if (sgSelect.value) payload.security_group_id = sgSelect.value;
-      if (fipSelect.value) payload.floating_ip_id = fipSelect.value;
+      if (epSelect.value) payload.public_endpoint_id = epSelect.value;
+      const tags = parseTags(tagsInput.value);
+      if (tags) payload.tags = tags;
 
       if (!payload.name) {
         messageEl.className = "message error";
@@ -430,9 +543,9 @@ export const computeView = {
       }
 
       try {
-        await withLoading(createBtn, "Creating...", async () => apis.compute.createInstance(payload));
+        const result = await withLoading(createBtn, "Creating...", async () => apis.compute.createInstance(payload));
         messageEl.className = "message ok";
-        messageEl.textContent = "Permintaan create instance berhasil dikirim.";
+        messageEl.textContent = `Instance sedang dibuat — ${result.status_detail || "queued"}`;
         form.reset();
         await loadCreateDependencies();
         await reloadAll();
@@ -459,6 +572,10 @@ export const computeView = {
       try {
         if (action === "detail") {
           await openDetailModal(id);
+          return;
+        }
+        if (action === "logs") {
+          await openLogsModal(id);
           return;
         }
         if (action === "exec") {

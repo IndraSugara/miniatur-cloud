@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import Optional
 
 import uuid
-from fastapi import HTTPException
 from minio import Minio
 from sqlalchemy.orm import Session
 
@@ -17,9 +16,16 @@ from config import (
     MINIO_SECRET_KEY,
     MINIO_SECURE,
 )
-from compute import get_engine, AVAILABLE_IMAGES, DOCKER_NETWORK
+from compute import get_engine, AVAILABLE_IMAGES, DOCKER_NETWORK, _resolve_docker_image
+from errors import (
+    not_found,
+    forbidden,
+    conflict,
+    bad_request,
+    raise_error,
+)
 from models import (
-    FloatingIP,
+    PublicEndpoint,
     Instance,
     InstanceStatus,
     Network,
@@ -68,9 +74,9 @@ def get_default_security_group(db: Session, owner_id: str) -> SecurityGroup:
 def get_security_group_for_user(db: Session, user: User, sg_id: str) -> SecurityGroup:
     sg = db.query(SecurityGroup).filter(SecurityGroup.id == sg_id).first()
     if not sg:
-        raise HTTPException(404, "Security group tidak ditemukan")
+        not_found("Security group")
     if not user.is_admin and not sg.is_default and sg.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     return sg
 
 
@@ -85,30 +91,30 @@ def security_group_allows_port(db: Session, sg_id: str, port: int) -> bool:
     return rules > 0
 
 
-# ── Floating IPs ────────────────────────────────────────────────
-def get_floating_ip_for_user(db: Session, user: User, fid: str) -> FloatingIP:
-    fip = db.query(FloatingIP).filter(FloatingIP.id == fid).first()
-    if not fip:
-        raise HTTPException(404, "Floating IP tidak ditemukan")
-    if not user.is_admin and fip.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
-    return fip
+# ── Public Endpoints (formerly Floating IPs) ──────────────────
+def get_public_endpoint_for_user(db: Session, user: User, ep_id: str) -> PublicEndpoint:
+    ep = db.query(PublicEndpoint).filter(PublicEndpoint.id == ep_id).first()
+    if not ep:
+        not_found("Public endpoint")
+    if not user.is_admin and ep.owner_id != user.id:
+        forbidden()
+    return ep
 
 
-def release_floating_ips_for_instance(db: Session, instance_id: str):
-    fips = db.query(FloatingIP).filter(FloatingIP.instance_id == instance_id).all()
-    for fip in fips:
-        fip.instance_id = None
-        fip.status = "available"
+def release_public_endpoints_for_instance(db: Session, instance_id: str):
+    eps = db.query(PublicEndpoint).filter(PublicEndpoint.instance_id == instance_id).all()
+    for ep in eps:
+        ep.instance_id = None
+        ep.status = "available"
 
 
-def get_attached_floating_ip(db: Session, instance_id: str) -> Optional[FloatingIP]:
-    return db.query(FloatingIP).filter(FloatingIP.instance_id == instance_id).first()
+def get_attached_public_endpoint(db: Session, instance_id: str) -> Optional[PublicEndpoint]:
+    return db.query(PublicEndpoint).filter(PublicEndpoint.instance_id == instance_id).first()
 
 
 def allocate_floating_port(db: Session) -> int:
     used_ports = set(
-        p[0] for p in db.query(FloatingIP.public_port).all()
+        p[0] for p in db.query(PublicEndpoint.public_port).all()
     )
     used_ports.update(
         p[0] for p in db.query(Instance.ssh_port).filter(Instance.ssh_port.isnot(None)).all()
@@ -116,12 +122,12 @@ def allocate_floating_port(db: Session) -> int:
     for port in range(FLOATING_PORT_START, FLOATING_PORT_END + 1):
         if port not in used_ports:
             return port
-    raise HTTPException(429, "Floating IP pool habis")
+    raise_error(429, "PORT_POOL_EXHAUSTED", "Public endpoint port pool habis")
 
 
 def allocate_ssh_port(db: Session) -> int:
     reserved = set(
-        p[0] for p in db.query(FloatingIP.public_port).all()
+        p[0] for p in db.query(PublicEndpoint.public_port).all()
     )
     reserved.update(
         p[0] for p in db.query(Instance.ssh_port).filter(Instance.ssh_port.isnot(None)).all()
@@ -129,22 +135,22 @@ def allocate_ssh_port(db: Session) -> int:
     return get_engine().next_ssh_port(reserved_ports=reserved)
 
 
-def attach_floating_ip_to_instance(db: Session, inst: Instance, fip: FloatingIP):
-    existing = get_attached_floating_ip(db, inst.id)
-    if existing and existing.id != fip.id:
-        raise HTTPException(409, "Instance sudah punya floating IP")
-    if fip.status != "available" and fip.instance_id != inst.id:
-        raise HTTPException(409, "Floating IP tidak tersedia")
+def attach_public_endpoint_to_instance(db: Session, inst: Instance, ep: PublicEndpoint):
+    existing = get_attached_public_endpoint(db, inst.id)
+    if existing and existing.id != ep.id:
+        conflict("Instance sudah punya public endpoint")
+    if ep.status != "available" and ep.instance_id != inst.id:
+        conflict("Public endpoint tidak tersedia")
     sg_id = inst.security_group_id
     if not sg_id:
         sg = get_default_security_group(db, inst.owner_id)
         sg_id = sg.id
         inst.security_group_id = sg_id
     if not security_group_allows_port(db, sg_id, 22):
-        raise HTTPException(409, "Security group menolak akses SSH")
-    inst.ssh_port = fip.public_port
-    fip.instance_id = inst.id
-    fip.status = "attached"
+        conflict("Security group menolak akses SSH")
+    inst.ssh_port = ep.public_port
+    ep.instance_id = inst.id
+    ep.status = "attached"
     inst.updated_at = datetime.utcnow()
     db.commit()
     if inst.container_id:
@@ -156,9 +162,9 @@ def attach_floating_ip_to_instance(db: Session, inst: Instance, fip: FloatingIP)
         recreate_instance_with_volumes(db, inst, net)
 
 
-def detach_floating_ip_from_instance(db: Session, inst: Instance, fip: FloatingIP):
-    fip.instance_id = None
-    fip.status = "available"
+def detach_public_endpoint_from_instance(db: Session, inst: Instance, ep: PublicEndpoint):
+    ep.instance_id = None
+    ep.status = "available"
     if inst.status == InstanceStatus.TERMINATED:
         inst.updated_at = datetime.utcnow()
         db.commit()
@@ -203,10 +209,7 @@ def get_s3_client() -> Minio:
 def normalize_bucket_name(name: str) -> str:
     bucket = name.strip().lower()
     if not BUCKET_NAME_RE.match(bucket):
-        raise HTTPException(
-            400,
-            "Nama bucket harus 3-63 karakter, huruf kecil/angka, dan boleh '-'.",
-        )
+        bad_request("Nama bucket harus 3-63 karakter, huruf kecil/angka, dan boleh '-'.")
     return bucket
 
 
@@ -214,9 +217,9 @@ def get_bucket_for_user(db: Session, user: User, bucket_name: str) -> ObjectBuck
     bucket_key = bucket_name.strip().lower()
     bucket = db.query(ObjectBucket).filter(ObjectBucket.name == bucket_key).first()
     if not bucket:
-        raise HTTPException(404, "Bucket tidak ditemukan")
+        not_found("Bucket")
     if not user.is_admin and bucket.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     return bucket
 
 
@@ -260,9 +263,9 @@ def get_default_network(db: Session, owner_id: str) -> Network:
 def get_network_for_user(db: Session, user: User, network_id: str) -> Network:
     net = db.query(Network).filter(Network.id == network_id).first()
     if not net:
-        raise HTTPException(404, "Network tidak ditemukan")
+        not_found("Network")
     if not user.is_admin and not net.is_default and net.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     return net
 
 
@@ -277,9 +280,9 @@ def resolve_image_for_user(db: Session, user: User, image_key: str) -> str:
         snap = db.query(Snapshot).filter(Snapshot.image_ref == image_key).first()
     if snap:
         if not user.is_admin and snap.owner_id != user.id:
-            raise HTTPException(403, "Bukan milikmu")
+            forbidden()
         return snap.image_ref
-    raise HTTPException(400, "Image tidak tersedia")
+    bad_request("Image tidak tersedia")
 
 
 # ── Volumes ─────────────────────────────────────────────────────
@@ -307,6 +310,7 @@ def detach_all_volumes(db: Session, instance_id: str):
 
 
 def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network):
+    """Recreate instance container, preserving user-installed state via commit."""
     prev_status = inst.status
     mounts = build_volume_mounts(db, inst.id)
     result = get_engine().recreate_instance(
@@ -321,6 +325,7 @@ def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network
         ssh_port=inst.ssh_port,
         ssh_password=inst.ssh_password,
         volume_mounts=mounts,
+        preserve_state=True,
     )
     inst.container_id = result["container_id"]
     inst.ip_address   = result["ip_address"]

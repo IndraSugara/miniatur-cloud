@@ -5,13 +5,22 @@ import uuid
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from minio.error import S3Error
 from sqlalchemy.orm import Session
 
 from compute import get_engine
 from database import get_db
 from deps import get_current_user
+from errors import (
+    not_found,
+    forbidden,
+    bad_request,
+    conflict,
+    still_in_use,
+    service_error,
+    already_exists,
+)
 from helpers import (
     get_bucket_for_user,
     get_default_network,
@@ -79,7 +88,12 @@ def create_volume(body: VolumeCreate, user: User = Depends(get_current_user),
     )
     db.add(vol)
     db.commit()
-    return {"volume_id": vid, "name": body.name, "size_gb": body.size_gb}
+    return {
+        "volume_id": vid,
+        "name": body.name,
+        "size_gb": body.size_gb,
+        "note": "Volume size is tracked but not enforced at Docker level",
+    }
 
 
 @router.delete("/volumes/{vid}")
@@ -87,14 +101,14 @@ def delete_volume(vid: str, user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
     vol = db.query(Volume).filter(Volume.id == vid).first()
     if not vol:
-        raise HTTPException(404, "Volume tidak ditemukan")
+        not_found("Volume")
     if not user.is_admin and vol.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     if vol.status != "available":
-        raise HTTPException(409, "Volume sedang terpasang")
+        still_in_use("Volume")
     attach = db.query(VolumeAttachment).filter(VolumeAttachment.volume_id == vid).first()
     if attach:
-        raise HTTPException(409, "Volume sedang terpasang")
+        still_in_use("Volume")
     if vol.host_path:
         get_engine().remove_volume(vol.host_path)
     db.delete(vol)
@@ -108,23 +122,23 @@ def attach_volume(vid: str, body: VolumeAttach,
                   db: Session = Depends(get_db)):
     vol = db.query(Volume).filter(Volume.id == vid).first()
     if not vol:
-        raise HTTPException(404, "Volume tidak ditemukan")
+        not_found("Volume")
     if not user.is_admin and vol.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     if vol.status != "available":
-        raise HTTPException(409, "Volume sedang terpasang")
+        still_in_use("Volume")
 
     inst = db.query(Instance).filter(Instance.id == body.instance_id).first()
     if not inst:
-        raise HTTPException(404, "Instance tidak ditemukan")
+        not_found("Instance")
     if not user.is_admin and inst.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
     if inst.status in [InstanceStatus.TERMINATED, InstanceStatus.ERROR, InstanceStatus.PENDING]:
-        raise HTTPException(400, "Instance belum siap")
+        bad_request("Instance belum siap")
 
     existing = db.query(VolumeAttachment).filter(VolumeAttachment.volume_id == vid).first()
     if existing:
-        raise HTTPException(409, "Volume sudah terpasang")
+        conflict("Volume sudah terpasang")
 
     mount_path = body.mount_path or f"/mnt/vol-{vid}"
     db.add(VolumeAttachment(
@@ -142,7 +156,12 @@ def attach_volume(vid: str, body: VolumeAttach,
     if not net:
         net = get_default_network(db, inst.owner_id)
     recreate_instance_with_volumes(db, inst, net)
-    return {"message": "Volume attached", "volume_id": vid, "instance_id": inst.id}
+    return {
+        "message": "Volume attached",
+        "volume_id": vid,
+        "instance_id": inst.id,
+        "note": "Instance was briefly restarted. Installed software is preserved.",
+    }
 
 
 @router.post("/volumes/{vid}/detach")
@@ -151,22 +170,22 @@ def detach_volume(vid: str, body: VolumeDetach,
                   db: Session = Depends(get_db)):
     vol = db.query(Volume).filter(Volume.id == vid).first()
     if not vol:
-        raise HTTPException(404, "Volume tidak ditemukan")
+        not_found("Volume")
     if not user.is_admin and vol.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
 
     inst = db.query(Instance).filter(Instance.id == body.instance_id).first()
     if not inst:
-        raise HTTPException(404, "Instance tidak ditemukan")
+        not_found("Instance")
     if not user.is_admin and inst.owner_id != user.id:
-        raise HTTPException(403, "Bukan milikmu")
+        forbidden()
 
     attach = db.query(VolumeAttachment).filter(
         VolumeAttachment.volume_id == vid,
         VolumeAttachment.instance_id == inst.id,
     ).first()
     if not attach:
-        raise HTTPException(404, "Attachment tidak ditemukan")
+        not_found("Attachment")
 
     db.delete(attach)
     vol.status = "available"
@@ -180,7 +199,12 @@ def detach_volume(vid: str, body: VolumeDetach,
             net = get_default_network(db, inst.owner_id)
         recreate_instance_with_volumes(db, inst, net)
 
-    return {"message": "Volume detached", "volume_id": vid, "instance_id": inst.id}
+    return {
+        "message": "Volume detached",
+        "volume_id": vid,
+        "instance_id": inst.id,
+        "note": "Instance was briefly restarted. Installed software is preserved.",
+    }
 
 
 # ── Object Storage (S3-like) ─────────────────────────────────
@@ -219,19 +243,17 @@ def create_bucket(body: BucketCreate, user: User = Depends(get_current_user),
 
     exists = db.query(ObjectBucket).filter(ObjectBucket.name == bucket_name).first()
     if exists:
-        raise HTTPException(409, "Bucket sudah terdaftar")
+        already_exists("Bucket")
 
     s3 = get_s3_client()
     try:
         if s3.bucket_exists(bucket_name):
-            raise HTTPException(409, "Bucket sudah ada")
+            already_exists("Bucket")
         s3.make_bucket(bucket_name)
-    except HTTPException:
-        raise
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
 
     bucket = ObjectBucket(
         id=str(uuid.uuid4()),
@@ -256,14 +278,12 @@ def delete_bucket(bucket: str, force: bool = False,
                 s3.remove_object(bucket_row.name, obj.object_name)
         else:
             for _ in s3.list_objects(bucket_row.name, recursive=True):
-                raise HTTPException(409, "Bucket tidak kosong")
+                conflict("Bucket tidak kosong")
         s3.remove_bucket(bucket_row.name)
-    except HTTPException:
-        raise
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
 
     db.delete(bucket_row)
     db.commit()
@@ -289,9 +309,9 @@ def list_objects(bucket: str, prefix: Optional[str] = None, limit: int = 200,
             if len(objects) >= limit:
                 break
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
     return {"objects": objects}
 
 
@@ -300,15 +320,15 @@ def delete_object(bucket: str, object_key: str,
                   user: User = Depends(get_current_user),
                   db: Session = Depends(get_db)):
     if not object_key:
-        raise HTTPException(400, "object_key wajib")
+        bad_request("object_key wajib")
     bucket_row = get_bucket_for_user(db, user, bucket)
     s3 = get_s3_client()
     try:
         s3.remove_object(bucket_row.name, object_key)
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
     return {"message": "Object dihapus"}
 
 
@@ -325,9 +345,9 @@ def presign_upload(bucket: str, body: PresignRequest,
             expires=timedelta(seconds=body.expiry_seconds),
         )
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
     return {
         "url": url,
         "method": "PUT",
@@ -349,9 +369,9 @@ def presign_download(bucket: str, body: PresignRequest,
             expires=timedelta(seconds=body.expiry_seconds),
         )
     except S3Error as e:
-        raise HTTPException(400, f"S3 error: {e.code}")
+        service_error("S3", e.code)
     except Exception as e:
-        raise HTTPException(502, f"MinIO error: {e}")
+        service_error("MinIO", str(e))
     return {
         "url": url,
         "method": "GET",

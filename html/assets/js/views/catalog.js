@@ -1,4 +1,4 @@
-import { escapeHtml } from "../utils.js";
+ï»¿import { escapeHtml } from "../utils.js";
 
 export const catalogView = {
   id: "catalog",
@@ -9,11 +9,11 @@ export const catalogView = {
       <div class="grid grid-2">
         <section class="panel">
           <h3>Images</h3>
-          <div id="image-list" class="dim"><span class="spinner"></span> Memuat…</div>
+          <div id="image-list" class="dim"><span class="spinner"></span> Memuat...</div>
         </section>
         <section class="panel">
           <h3>Instance Types</h3>
-          <div id="type-list" class="dim"><span class="spinner"></span> Memuat…</div>
+          <div id="type-list" class="dim"><span class="spinner"></span> Memuat...</div>
         </section>
       </div>
     `;
@@ -25,17 +25,27 @@ export const catalogView = {
     root.querySelector("#image-list").innerHTML =
       images.length === 0
         ? `<p class="dim">Tidak ada image.</p>`
-        : `<ul>${images.map((item) => `<li><span class="mono">${escapeHtml(item)}</span></li>`).join("")}</ul>`;
+        : `<div class="table-wrap"><table>
+            <thead><tr><th>Image</th><th>Description</th></tr></thead>
+            <tbody>${images.map((item) => {
+              const key = typeof item === "string" ? item : item.key;
+              const desc = typeof item === "object" && item.description ? item.description : "-";
+              return `<tr><td class="mono">${escapeHtml(key)}</td><td>${escapeHtml(desc)}</td></tr>`;
+            }).join("")}</tbody>
+          </table></div>`;
 
     root.querySelector("#type-list").innerHTML =
       Object.keys(types).length === 0
         ? `<p class="dim">Tidak ada type.</p>`
-        : `<ul>${Object.entries(types)
-            .map(
-              ([name, value]) =>
-                `<li><span class="mono">${escapeHtml(name)}</span> - ${value.vcpu} vCPU / ${value.memory_mb} MB</li>`,
-            )
-            .join("")}</ul>`;
+        : `<div class="table-wrap"><table>
+            <thead><tr><th>Type</th><th>vCPU</th><th>RAM</th><th>Description</th></tr></thead>
+            <tbody>${Object.entries(types)
+              .map(
+                ([name, value]) =>
+                  `<tr><td class="mono">${escapeHtml(name)}</td><td>${value.vcpu}</td><td>${value.memory_mb} MB</td><td>${escapeHtml(value.description || "-")}</td></tr>`,
+              )
+              .join("")}</tbody>
+          </table></div>`;
 
     return () => {};
   },
