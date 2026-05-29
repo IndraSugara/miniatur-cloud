@@ -124,9 +124,12 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
     environment:
       GF_SECURITY_ADMIN_PASSWORD: admin
-      GF_SERVER_ROOT_URL: https://app.sughara.my.id/monitor/
+      GF_SERVER_DOMAIN: app.sughara.my.id
+      GF_SERVER_ROOT_URL: "%(protocol)s://%(domain)s/monitor/"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SECURITY_COOKIE_SECURE: "false"
+      GF_SECURITY_COOKIE_SAMESITE: lax
     networks:
       - cloud-net
     depends_on:
