@@ -4,19 +4,21 @@ import string
 import uuid
 import logging
 import time
-from docker.types import IPAMConfig, IPAMPool
+from docker.types import DeviceRequest, IPAMConfig, IPAMPool
 
 log = logging.getLogger("iaas.compute")
 
 DOCKER_NETWORK = "miniatur-cloud_cloud-net"
 
 INSTANCE_TYPES = {
-    "nano.micro" : {"vcpu": 0.25, "memory_mb": 128,  "description": "Minimal — testing & exploration"},
-    "nano.small" : {"vcpu": 0.5,  "memory_mb": 256,  "description": "Lightweight — simple web servers"},
-    "nano.medium": {"vcpu": 1.0,  "memory_mb": 512,  "description": "Balanced — general purpose workloads"},
-    "nano.large" : {"vcpu": 2.0,  "memory_mb": 1024, "description": "Performance — databases & builds"},
-    "nano.xlarge": {"vcpu": 2.0,  "memory_mb": 2048, "description": "High-memory — caching & analytics"},
-    "nano.compute": {"vcpu": 2.0, "memory_mb": 1536, "description": "Compute-optimised — CPU-heavy tasks"},
+    "nano.micro"  : {"vcpu": 0.25, "memory_mb": 128,  "gpu": False, "description": "Minimal — testing & exploration"},
+    "nano.small"  : {"vcpu": 0.5,  "memory_mb": 256,  "gpu": False, "description": "Lightweight — simple web servers"},
+    "nano.medium" : {"vcpu": 1.0,  "memory_mb": 512,  "gpu": False, "description": "Balanced — general purpose workloads"},
+    "nano.large"  : {"vcpu": 2.0,  "memory_mb": 1024, "gpu": False, "description": "Performance — databases & builds"},
+    "nano.xlarge" : {"vcpu": 2.0,  "memory_mb": 2048, "gpu": False, "description": "High-memory — caching & analytics"},
+    "nano.compute": {"vcpu": 2.0,  "memory_mb": 1536, "gpu": False, "description": "Compute-optimised — CPU-heavy tasks"},
+    "nano.gpu"    : {"vcpu": 1.0,  "memory_mb": 512,  "gpu": True,  "description": "GPU — 128-core Maxwell, CUDA workloads"},
+    "nano.gpu-lg" : {"vcpu": 2.0,  "memory_mb": 1024, "gpu": True,  "description": "GPU Large — 128-core Maxwell, ML inference"},
 }
 
 AVAILABLE_IMAGES = {
@@ -116,6 +118,7 @@ class ComputeEngine:
         volume_mounts=None,
         published_ports=None,
         status_callback=None,
+        gpu=False,
     ) -> dict:
         iid       = instance_id or str(uuid.uuid4())
         cname     = f"iaas-{iid[:8]}"
@@ -148,8 +151,15 @@ class ComputeEngine:
         elif ssh_port:
             ports_spec = {"22/tcp": ssh_port}
 
-        log.info(f"Membuat instance {cname} | {image} | ssh_port={ssh_port} | net={net_name}")
+        gpu_label = "yes" if gpu else "no"
+        log.info(f"Membuat instance {cname} | {image} | ssh_port={ssh_port} | net={net_name} | gpu={gpu}")
         _report("Preparing container...")
+
+        # GPU passthrough via NVIDIA Container Runtime
+        device_requests = None
+        if gpu:
+            _report("Requesting GPU access (128-core Maxwell)...")
+            device_requests = [DeviceRequest(count=-1, capabilities=[["gpu"]])]
 
         try:
             _report("Pulling image if needed...")
@@ -162,6 +172,7 @@ class ComputeEngine:
                 mem_limit=mem_bytes,
                 ports=ports_spec,
                 volumes=volume_spec,
+                device_requests=device_requests,
                 stdin_open=True,
                 tty=True,
                 restart_policy={"Name": "unless-stopped"},
@@ -169,6 +180,7 @@ class ComputeEngine:
                     "iaas.instance_id": iid,
                     "iaas.owner_id"   : owner_id,
                     "iaas.name"       : name,
+                    "iaas.gpu"        : gpu_label,
                     **({f"iaas.ssh_port": str(ssh_port)} if ssh_port else {}),
                 },
                 command="/bin/sh" if "alpine" in image_key else "/bin/bash",
@@ -227,6 +239,7 @@ class ComputeEngine:
                 volume_mounts=volume_mounts,
                 published_ports=published_ports,
                 status_callback=status_callback,
+                gpu=gpu,
             )
 
         except Exception as e:
@@ -305,6 +318,7 @@ class ComputeEngine:
         volume_mounts,
         published_ports=None,
         preserve_state=True,
+        gpu=False,
     ) -> dict:
         """Recreate an instance container.
 
@@ -344,6 +358,7 @@ class ComputeEngine:
             ssh_password=ssh_password,
             volume_mounts=volume_mounts,
             published_ports=published_ports,
+            gpu=gpu,
         )
 
         # Clean up temporary committed image after recreation

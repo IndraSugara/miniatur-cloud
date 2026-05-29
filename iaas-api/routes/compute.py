@@ -188,6 +188,7 @@ def create_instance(body: InstanceCreate, bg: BackgroundTasks,
         user.id,
         network.id if network else None,
         ssh_port,
+        itype.get("gpu", False),
     )
     audit.info("INSTANCE_CREATE user=%s instance=%s name=%s type=%s",
                user.username, iid[:8], body.name, body.instance_type)
@@ -213,7 +214,7 @@ def _update_status_detail(iid: str, detail: str):
         db.close()
 
 
-def _create_container(iid, name, image_key, itype, owner_id, network_id, ssh_port):
+def _create_container(iid, name, image_key, itype, owner_id, network_id, ssh_port, gpu=False):
     db = SessionLocal()
     try:
         # Update status: starting provisioning
@@ -242,6 +243,7 @@ def _create_container(iid, name, image_key, itype, owner_id, network_id, ssh_por
             volume_mounts=volume_mounts,
             ssh_port=ssh_port,
             status_callback=status_callback,
+            gpu=gpu,
         )
         # Reload instance to get fresh state
         inst = db.query(Instance).filter(Instance.id == iid).first()

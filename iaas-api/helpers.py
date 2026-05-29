@@ -311,8 +311,10 @@ def detach_all_volumes(db: Session, instance_id: str):
 
 def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network):
     """Recreate instance container, preserving user-installed state via commit."""
+    from compute import INSTANCE_TYPES
     prev_status = inst.status
     mounts = build_volume_mounts(db, inst.id)
+    gpu = INSTANCE_TYPES.get(inst.instance_type, {}).get("gpu", False)
     result = get_engine().recreate_instance(
         container_id=inst.container_id,
         name=inst.name,
@@ -326,6 +328,7 @@ def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network
         ssh_password=inst.ssh_password,
         volume_mounts=mounts,
         preserve_state=True,
+        gpu=gpu,
     )
     inst.container_id = result["container_id"]
     inst.ip_address   = result["ip_address"]

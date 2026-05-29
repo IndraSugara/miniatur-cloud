@@ -38,11 +38,11 @@ export const catalogView = {
       Object.keys(types).length === 0
         ? `<p class="dim">Tidak ada type.</p>`
         : `<div class="table-wrap"><table>
-            <thead><tr><th>Type</th><th>vCPU</th><th>RAM</th><th>Description</th></tr></thead>
+            <thead><tr><th>Type</th><th>vCPU</th><th>RAM</th><th>GPU</th><th>Description</th></tr></thead>
             <tbody>${Object.entries(types)
               .map(
                 ([name, value]) =>
-                  `<tr><td class="mono">${escapeHtml(name)}</td><td>${value.vcpu}</td><td>${value.memory_mb} MB</td><td>${escapeHtml(value.description || "-")}</td></tr>`,
+                  `<tr><td class="mono">${escapeHtml(name)}</td><td>${value.vcpu}</td><td>${value.memory_mb} MB</td><td>${value.gpu ? "128-core Maxwell" : "-"}</td><td>${escapeHtml(value.description || "-")}</td></tr>`,
               )
               .join("")}</tbody>
           </table></div>`;

@@ -76,6 +76,7 @@ def list_types():
             key: {
                 "vcpu": val["vcpu"],
                 "memory_mb": val["memory_mb"],
+                "gpu": val.get("gpu", False),
                 "description": val["description"],
             }
             for key, val in INSTANCE_TYPES.items()

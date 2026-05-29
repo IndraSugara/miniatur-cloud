@@ -169,8 +169,9 @@ export const computeView = {
       typeSelect.innerHTML = Object.entries(types)
         .map(
           ([key, value]) => {
+            const gpuBadge = value.gpu ? " [GPU]" : "";
             const desc = value.description ? ` — ${value.description}` : "";
-            return `<option value="${key}">${key} (${value.vcpu} vCPU / ${value.memory_mb} MB)${desc}</option>`;
+            return `<option value="${key}">${key} (${value.vcpu} vCPU / ${value.memory_mb} MB${gpuBadge})${desc}</option>`;
           },
         )
         .join("");
