@@ -126,6 +126,7 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_SERVER_ROOT_URL: https://app.sughara.my.id/monitor/
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
     networks:
       - cloud-net
     depends_on:

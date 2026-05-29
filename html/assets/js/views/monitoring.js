@@ -19,13 +19,6 @@ export const monitoringView = {
 
     root.innerHTML = `
       <section class="panel">
-        <div class="toolbar">
-          <button id="open-grafana" class="btn">Open Grafana</button>
-          <button id="open-prom" class="btn">Open Prometheus</button>
-        </div>
-      </section>
-
-      <section class="panel">
         <h3>Host Metrics Live</h3>
         <div class="grid grid-3">
           <div class="metric">
@@ -49,16 +42,29 @@ export const monitoringView = {
       </section>
 
       <section class="panel">
-        <h3>Raw Payload</h3>
-        <pre id="raw-monitor" class="mono dim"><span class="spinner"></span> Memuat…</pre>
+        <div class="toolbar" style="justify-content:space-between;">
+          <h3>Grafana Dashboard</h3>
+          <button id="open-grafana-tab" class="btn btn-inline btn-ghost">Open in New Tab</button>
+        </div>
+        <div style="border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);">
+          <iframe id="grafana-frame" src="/monitor/"
+            style="width:100%;height:500px;border:none;background:var(--panel);"
+            loading="lazy"></iframe>
+        </div>
+        <p class="dim" style="margin-top:8px;font-size:0.8rem;">
+          Jika Grafana tidak muncul, pastikan container cloud-dashboard sudah running.
+          Login default: admin / admin
+        </p>
+      </section>
+
+      <section class="panel">
+        <h3>Raw Host Payload</h3>
+        <pre id="raw-monitor" class="mono dim"><span class="spinner"></span> Memuat...</pre>
       </section>
     `;
 
-    root.querySelector("#open-grafana").addEventListener("click", () => {
+    root.querySelector("#open-grafana-tab").addEventListener("click", () => {
       window.open("/monitor/", "_blank", "noopener");
-    });
-    root.querySelector("#open-prom").addEventListener("click", () => {
-      window.open("/metrics/", "_blank", "noopener");
     });
 
     const cpu = root.querySelector("#mon-cpu");
@@ -89,9 +95,7 @@ export const monitoringView = {
 
     await load();
     const timer = window.setInterval(() => {
-      load().catch(() => {
-        // ignore periodic refresh failure
-      });
+      load().catch(() => {});
     }, REFRESH_MS);
 
     return () => window.clearInterval(timer);
