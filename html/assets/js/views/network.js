@@ -1,4 +1,4 @@
-﻿import { REFRESH_MS } from "../config.js";
+import { REFRESH_MS } from "../config.js";
 import { escapeHtml, statusClass } from "../utils.js";
 import { showModal, toast } from "../ui.js";
 
@@ -78,16 +78,38 @@ export const networkView = {
           </table>
         </div>
       </section>
+      <section class="panel">
+        <h3>Ingress Routes</h3>
+        <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">
+          Dynamic HTTP proxy routing via Nginx.
+        </p>
+        <div class="toolbar" style="margin-bottom:12px;">
+          <button id="btn-create-ingress" class="btn btn-primary">Create Ingress</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>Path</th><th>Target Port</th><th>Instance</th><th>Actions</th></tr>
+            </thead>
+            <tbody id="ingress-body">
+              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuat...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     `;
 
     const networkBody = root.querySelector("#network-body");
     const sgList = root.querySelector("#sg-list");
     const epBody = root.querySelector("#ep-body");
     const epInstanceSelect = root.querySelector("#ep-instance-select");
+    const ingressBody = root.querySelector("#ingress-body");
+    const btnCreateIngress = root.querySelector("#btn-create-ingress");
 
     let networks = [];
     let securityGroups = [];
     let publicEndpoints = [];
+    let ingressRules = [];
     let instances = [];
 
     function renderNetworks() {
@@ -208,21 +230,45 @@ export const networkView = {
       epInstanceSelect.innerHTML = `<option value="">Allocate only</option>${rows}`;
     }
 
+    function renderIngressRules() {
+      if (ingressRules.length === 0) {
+        ingressBody.innerHTML = `<tr><td colspan="4" class="dim">Belum ada ingress rule.</td></tr>`;
+        return;
+      }
+      ingressBody.innerHTML = ingressRules
+        .map(
+          (r) => `
+            <tr>
+              <td class="mono"><a href="${escapeHtml(r.path)}" target="_blank">${escapeHtml(r.path)}</a></td>
+              <td class="mono">${r.target_port}</td>
+              <td>${escapeHtml(resolveInstanceName(r.instance_id))}</td>
+              <td>
+                <button class="btn btn-inline btn-danger" data-ingress-delete="${r.id}">Delete</button>
+              </td>
+            </tr>
+          `,
+        )
+        .join("");
+    }
+
     async function loadAll() {
-      const [netPayload, sgPayload, epPayload, instancePayload] = await Promise.all([
+      const [netPayload, sgPayload, epPayload, inPayload, instancePayload] = await Promise.all([
         apis.network.listNetworks(),
         apis.network.listSecurityGroups(),
         apis.network.listPublicEndpoints(),
+        apis.network.listIngressRules(),
         apis.compute.listInstances(),
       ]);
       networks = netPayload.networks || [];
       securityGroups = sgPayload.security_groups || [];
       publicEndpoints = epPayload.public_endpoints || [];
+      ingressRules = inPayload.ingress_rules || [];
       instances = instancePayload.instances || [];
       renderNetworks();
       renderSecurityGroups();
       renderPublicEndpoints();
       renderEpInstanceChoices();
+      renderIngressRules();
     }
 
     root.querySelector("#network-form").addEventListener("submit", async (event) => {
@@ -427,6 +473,84 @@ export const networkView = {
             },
           ],
         });
+      }
+    });
+
+    btnCreateIngress.addEventListener("click", () => {
+      const choices = instances
+        .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
+      if (choices.length === 0) {
+        toast("Tidak ada instance yang bisa dipilih.", "error");
+        return;
+      }
+      const optionsHtml = choices
+        .map((item) => `<option value="${item.id}">${escapeHtml(item.name)} (${item.status})</option>`)
+        .join("");
+      
+      const modal = showModal({
+        title: "Create Ingress Route",
+        bodyHtml: `
+          <div class="grid grid-1" style="gap:10px;">
+            <div>
+              <label class="field-label" for="in-target">Pilih Instance</label>
+              <select id="in-target">${optionsHtml}</select>
+            </div>
+            <div>
+              <label class="field-label" for="in-path">Path (e.g. /my-api/)</label>
+              <input id="in-path" type="text" placeholder="/my-api/" required />
+            </div>
+            <div>
+              <label class="field-label" for="in-port">Target Port</label>
+              <input id="in-port" type="number" value="8000" min="1" max="65535" required />
+            </div>
+          </div>
+        `,
+        actions: [
+          {
+            label: "Create",
+            className: "btn btn-primary",
+            onClick: async ({ close }) => {
+              const instanceId = modal.wrapper.querySelector("#in-target").value;
+              const path = modal.wrapper.querySelector("#in-path").value;
+              const targetPort = Number(modal.wrapper.querySelector("#in-port").value);
+              
+              if (!path) {
+                toast("Path wajib diisi.", "error");
+                return;
+              }
+              
+              try {
+                await apis.network.createIngressRule({
+                  instance_id: instanceId,
+                  path: path,
+                  target_port: targetPort
+                });
+                toast("Ingress rule dibuat.");
+                close();
+                await loadAll();
+              } catch (error) {
+                toast(errMsg(error), "error");
+              }
+            },
+          },
+        ],
+      });
+    });
+
+    ingressBody.addEventListener("click", async (event) => {
+      const target = event.target;
+      if (!(target instanceof HTMLElement)) return;
+
+      const deleteId = target.dataset.ingressDelete;
+      if (deleteId) {
+        if (!window.confirm("Delete ingress route ini?")) return;
+        try {
+          await apis.network.deleteIngressRule(deleteId);
+          toast("Ingress route dihapus.");
+          await loadAll();
+        } catch (error) {
+          toast(errMsg(error), "error");
+        }
       }
     });
 

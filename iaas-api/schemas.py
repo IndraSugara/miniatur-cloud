@@ -100,3 +100,8 @@ class BucketCreate(BaseModel):
 class PresignRequest(BaseModel):
     object_key: str = Field(..., min_length=1, max_length=1024)
     expiry_seconds: int = Field(default=3600, ge=60, le=604800)
+
+class IngressRuleCreate(BaseModel):
+    instance_id: str
+    path: str = Field(..., min_length=2, max_length=128)
+    target_port: int = Field(..., ge=1, le=65535)

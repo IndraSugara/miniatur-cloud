@@ -28,6 +28,7 @@ from models import (
     PublicEndpoint,
     Instance,
     InstanceStatus,
+    IngressRule,
     Network,
     ObjectBucket,
     SecurityGroup,
@@ -342,3 +343,40 @@ def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network
         inst.status = InstanceStatus.STOPPED
         inst.updated_at = datetime.utcnow()
         db.commit()
+
+
+# ── Ingress Routing ────────────────────────────────────────────
+def sync_nginx_ingress(db: Session):
+    import os
+    rules = db.query(IngressRule).all()
+    
+    config_lines = []
+    for rule in rules:
+        inst = db.query(Instance).filter(Instance.id == rule.instance_id).first()
+        if inst and inst.ip_address:
+            # Generate the location block
+            config_lines.append(f"location {rule.path} {{")
+            config_lines.append(f"    proxy_pass http://{inst.ip_address}:{rule.target_port}/;")
+            config_lines.append(f"    proxy_set_header Host $host;")
+            config_lines.append(f"    proxy_set_header X-Real-IP $remote_addr;")
+            config_lines.append(f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
+            config_lines.append(f"    proxy_set_header X-Forwarded-Proto $scheme;")
+            config_lines.append("}")
+    
+    config_content = "\n".join(config_lines)
+    
+    # Write to the shared volume
+    ingress_dir = "/app/ingress"
+    os.makedirs(ingress_dir, exist_ok=True)
+    conf_path = os.path.join(ingress_dir, "routes.conf")
+    with open(conf_path, "w") as f:
+        f.write(config_content)
+    
+    # Reload Nginx via Docker Exec
+    try:
+        container = get_engine().client.containers.get("cloud-gateway")
+        res = container.exec_run("nginx -s reload")
+        if res.exit_code != 0:
+            print("Failed to reload Nginx:", res.output)
+    except Exception as e:
+        print("Error reloading Nginx:", e)

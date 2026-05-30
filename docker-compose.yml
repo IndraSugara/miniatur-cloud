@@ -175,6 +175,7 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ingress:/etc/nginx/ingress:ro
       - ./html:/usr/share/nginx/html:ro
     networks:
       - cloud-net
@@ -195,6 +196,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./iaas-api:/app
+      - ./nginx/ingress:/app/ingress
     environment:
       SECRET_KEY: iaas-jetson-rahasia-ganti-ini
       DATABASE_URL: postgresql://clouduser:CloudPass2024!@cloud-db:5432/clouddb

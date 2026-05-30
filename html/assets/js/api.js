@@ -209,6 +209,10 @@ export const networkApi = {
     request(`/public-endpoints/${id}/attach`, { method: "POST", body: { instance_id: instanceId } }),
   detachPublicEndpoint: (id) => request(`/public-endpoints/${id}/detach`, { method: "POST" }),
   deletePublicEndpoint: (id) => request(`/public-endpoints/${id}`, { method: "DELETE" }),
+  // Ingress Routes
+  listIngressRules: () => request("/ingress-rules"),
+  createIngressRule: (payload) => request("/ingress-rules", { method: "POST", body: payload }),
+  deleteIngressRule: (id) => request(`/ingress-rules/${id}`, { method: "DELETE" }),
 };
 
 export const storageApi = {

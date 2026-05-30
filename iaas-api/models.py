@@ -125,3 +125,12 @@ class VolumeAttachment(Base):
     instance_id = Column(String(36), nullable=False)
     mount_path  = Column(String(128), nullable=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
+
+class IngressRule(Base):
+    __tablename__ = "ingress_rules"
+    id          = Column(String(36), primary_key=True)
+    owner_id    = Column(String(36), nullable=False)
+    instance_id = Column(String(36), nullable=False)
+    path        = Column(String(256), nullable=False)
+    target_port = Column(Integer, nullable=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)
