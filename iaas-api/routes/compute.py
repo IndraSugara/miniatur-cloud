@@ -3,15 +3,17 @@ from __future__ import annotations
 import json
 import logging
 import uuid
+import asyncio
+import threading
 from datetime import datetime
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
 
 from compute import get_engine, INSTANCE_TYPES, DOCKER_NETWORK
 from config import PUBLIC_HOST
 from database import SessionLocal, get_db
-from deps import get_current_user
+from deps import get_current_user, get_current_user_from_token_str
 from errors import (
     not_found,
     forbidden,
@@ -477,3 +479,65 @@ def delete_snapshot(sid: str, user: User = Depends(get_current_user),
     db.delete(snap)
     db.commit()
     return {"message": "Snapshot dihapus"}
+
+
+def _terminal_read_loop(sock, websocket, loop):
+    try:
+        while True:
+            data = sock.recv(1024)
+            if not data:
+                break
+            # Use send_text for xterm.js compatibility, decoding safely
+            text_data = data.decode('utf-8', errors='replace')
+            asyncio.run_coroutine_threadsafe(websocket.send_text(text_data), loop)
+    except Exception:
+        pass
+    finally:
+        try:
+            asyncio.run_coroutine_threadsafe(websocket.close(), loop)
+        except:
+            pass
+
+@router.websocket("/instances/{iid}/terminal")
+async def instance_terminal(websocket: WebSocket, iid: str, token: str):
+    await websocket.accept()
+    db = SessionLocal()
+    raw_sock = None
+    try:
+        user = get_current_user_from_token_str(token, db)
+        inst = db.query(Instance).filter(Instance.id == iid).first()
+        if not inst or (inst.owner_id != user.id and not user.is_admin):
+            await websocket.close(1008, "Forbidden")
+            return
+        if inst.status != InstanceStatus.RUNNING or not inst.container_id:
+            await websocket.close(1008, "Instance not running")
+            return
+            
+        client = get_engine().client
+        exec_id = client.api.exec_create(inst.container_id, cmd="/bin/bash", tty=True, stdin=True, stdout=True, stderr=True)['Id']
+        sock = client.api.exec_start(exec_id, socket=True, tty=True)
+        raw_sock = sock._sock
+        
+        loop = asyncio.get_running_loop()
+        reader_thread = threading.Thread(target=_terminal_read_loop, args=(raw_sock, websocket, loop), daemon=True)
+        reader_thread.start()
+        
+        try:
+            while True:
+                data = await websocket.receive_text()
+                raw_sock.sendall(data.encode('utf-8'))
+        except WebSocketDisconnect:
+            pass
+    except Exception as e:
+        log.error(f"Terminal error: {e}")
+        try:
+            await websocket.close(1011, "Internal error")
+        except:
+            pass
+    finally:
+        if raw_sock:
+            try:
+                raw_sock.close()
+            except:
+                pass
+        db.close()

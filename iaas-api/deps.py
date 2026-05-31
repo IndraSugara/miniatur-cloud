@@ -71,6 +71,22 @@ def get_current_user(token: str = Depends(oauth2), db: Session = Depends(get_db)
         invalid_token()
 
 
+def get_current_user_from_token_str(token: str, db: Session):
+    try:
+        payload  = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") not in ("access", None):
+            raise HTTPException(status_code=401, detail="Token invalid")
+        username = payload.get("sub")
+        if not username:
+            raise HTTPException(status_code=401, detail="Token invalid")
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Token invalid")
+        return user
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token invalid")
+
+
 def require_admin(user: User = Depends(get_current_user)):
     if not user.is_admin:
         admin_only()

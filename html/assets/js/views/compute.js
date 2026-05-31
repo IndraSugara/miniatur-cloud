@@ -231,6 +231,11 @@ export const computeView = {
                   <button class="btn btn-inline" data-action="detail" data-id="${item.id}">Detail</button>
                   <button class="btn btn-inline" data-action="logs" data-id="${item.id}">Logs</button>
                   <button class="btn btn-inline" data-action="exec" data-id="${item.id}">Exec</button>
+                  ${
+                    item.status === "running"
+                      ? `<button class="btn btn-inline" data-action="console" data-id="${item.id}">Console</button>`
+                      : ""
+                  }
                   <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snapshot</button>
                   ${
                     item.status === "running"
@@ -581,6 +586,66 @@ export const computeView = {
         }
         if (action === "exec") {
           await openExecModal(id);
+          return;
+        }
+        if (action === "console") {
+          const modal = showModal({
+            title: `Web Terminal — ${id.slice(0, 8)}`,
+            bodyHtml: `<div id="terminal-container" style="height: 400px; width: 100%; background: #000; border-radius: 4px; padding: 4px; overflow: hidden;"></div>`,
+          });
+          const termContainer = modal.wrapper.querySelector("#terminal-container");
+          const term = new window.Terminal({
+            cursorBlink: true,
+            fontFamily: "monospace",
+            fontSize: 14,
+            theme: { background: "#000" }
+          });
+          const fitAddon = new window.FitAddon.FitAddon();
+          term.loadAddon(fitAddon);
+          term.open(termContainer);
+          // Wait slightly for DOM to settle before fitting
+          setTimeout(() => fitAddon.fit(), 50);
+
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+          const token = apis.auth.getToken();
+          const wsUrl = `${protocol}//${window.location.host}/api/instances/${id}/terminal?token=${token}`;
+          
+          const ws = new WebSocket(wsUrl);
+          ws.onopen = () => {
+             term.writeln('\\r\\n*** Connected to instance ***\\r\\n');
+          };
+          ws.onmessage = (evt) => {
+             term.write(evt.data);
+          };
+          term.onData((data) => {
+             if (ws.readyState === WebSocket.OPEN) {
+                ws.send(data);
+             }
+          });
+          ws.onclose = () => {
+             term.writeln('\\r\\n*** Disconnected ***\\r\\n');
+          };
+          ws.onerror = () => {
+             term.writeln('\\r\\n*** Connection Error ***\\r\\n');
+          };
+          
+          // Handle cleanup on modal close
+          const oldClose = modal.close;
+          modal.close = () => {
+             if (ws.readyState === WebSocket.OPEN) ws.close();
+             term.dispose();
+             oldClose();
+          };
+          
+          // Handle window resize
+          const resizeHandler = () => fitAddon.fit();
+          window.addEventListener("resize", resizeHandler);
+          const cleanupResize = () => window.removeEventListener("resize", resizeHandler);
+          
+          const modalCloseBtn = modal.wrapper.querySelector(".modal-close");
+          if (modalCloseBtn) {
+            modalCloseBtn.addEventListener("click", cleanupResize);
+          }
           return;
         }
         if (action === "snapshot") {

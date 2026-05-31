@@ -125,6 +125,7 @@ async function request(path, { method = "GET", body, auth = true, headers = {} }
 
 export const auth = {
   hasToken: () => Boolean(readToken()),
+  getToken: () => readToken(),
   clear: () => clearTokens(),
   async login(username, password) {
     const form = new URLSearchParams();
