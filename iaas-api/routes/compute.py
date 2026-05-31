@@ -36,6 +36,7 @@ from helpers import (
     release_public_endpoints_for_instance,
     resolve_image_for_user,
     security_group_allows_port,
+    sync_nginx_ingress,
 )
 from models import (
     PublicEndpoint,
@@ -361,17 +362,23 @@ def instance_action(iid: str, body: InstanceAction,
     action = body.action.lower()
 
     if action == "start":
-        eng.start_instance(inst.container_id)
+        ip = eng.start_instance(inst.container_id)
+        if ip:
+            inst.ip_address = ip
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running"
+        sync_nginx_ingress(db)
     elif action == "stop":
         eng.stop_instance(inst.container_id)
         inst.status = InstanceStatus.STOPPED
         inst.status_detail = "Stopped by user"
     elif action == "reboot":
-        eng.restart_instance(inst.container_id)
+        ip = eng.restart_instance(inst.container_id)
+        if ip:
+            inst.ip_address = ip
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running (rebooted)"
+        sync_nginx_ingress(db)
     elif action == "terminate":
         eng.terminate_instance(inst.container_id)
         inst.status = InstanceStatus.TERMINATED

@@ -269,14 +269,25 @@ class ComputeEngine:
         except Exception as e:
             return {"status": "error", "detail": str(e)}
 
+    def _get_ip(self, container):
+        container.reload()
+        networks = container.attrs["NetworkSettings"]["Networks"]
+        if not networks:
+            return ""
+        return list(networks.values())[0].get("IPAddress", "")
+
     def start_instance(self, container_id):
-        self.client.containers.get(container_id).start()
+        c = self.client.containers.get(container_id)
+        c.start()
+        return self._get_ip(c)
 
     def stop_instance(self, container_id):
         self.client.containers.get(container_id).stop(timeout=10)
 
     def restart_instance(self, container_id):
-        self.client.containers.get(container_id).restart(timeout=10)
+        c = self.client.containers.get(container_id)
+        c.restart(timeout=10)
+        return self._get_ip(c)
 
     def terminate_instance(self, container_id):
         try:
