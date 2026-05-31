@@ -484,14 +484,21 @@ def delete_snapshot(sid: str, user: User = Depends(get_current_user),
 def _terminal_read_loop(sock, websocket, loop):
     try:
         while True:
-            data = sock.recv(1024)
+            # Handle different socket/file-like object types returned by docker-py
+            if hasattr(sock, 'recv'):
+                data = sock.recv(1024)
+            elif hasattr(sock, 'read'):
+                data = sock.read(1024)
+            else:
+                break
+                
             if not data:
                 break
             # Use send_text for xterm.js compatibility, decoding safely
             text_data = data.decode('utf-8', errors='replace')
             asyncio.run_coroutine_threadsafe(websocket.send_text(text_data), loop)
-    except Exception:
-        pass
+    except Exception as e:
+        log.error(f"Reader thread error: {e}")
     finally:
         try:
             asyncio.run_coroutine_threadsafe(websocket.close(), loop)
@@ -527,7 +534,11 @@ async def instance_terminal(websocket: WebSocket, iid: str, token: str):
         try:
             while True:
                 data = await websocket.receive_text()
-                raw_sock.send(data.encode('utf-8'))
+                encoded = data.encode('utf-8')
+                if hasattr(raw_sock, 'send'):
+                    raw_sock.send(encoded)
+                elif hasattr(raw_sock, 'write'):
+                    raw_sock.write(encoded)
         except WebSocketDisconnect:
             pass
     except Exception as e:
