@@ -514,9 +514,11 @@ async def instance_terminal(websocket: WebSocket, iid: str, token: str):
             return
             
         client = get_engine().client
-        exec_id = client.api.exec_create(inst.container_id, cmd="/bin/bash", tty=True, stdin=True, stdout=True, stderr=True)['Id']
+        # Gunakan /bin/sh agar kompatibel dengan Alpine & Ubuntu
+        exec_id = client.api.exec_create(inst.container_id, cmd=["/bin/sh"], tty=True, stdin=True, stdout=True, stderr=True)['Id']
         sock = client.api.exec_start(exec_id, socket=True, tty=True)
-        raw_sock = sock._sock
+        # Ambil raw socket yang sebenarnya (menangani perbedaan versi docker-py)
+        raw_sock = getattr(sock, '_sock', sock)
         
         loop = asyncio.get_running_loop()
         reader_thread = threading.Thread(target=_terminal_read_loop, args=(raw_sock, websocket, loop), daemon=True)
@@ -525,7 +527,7 @@ async def instance_terminal(websocket: WebSocket, iid: str, token: str):
         try:
             while True:
                 data = await websocket.receive_text()
-                raw_sock.sendall(data.encode('utf-8'))
+                raw_sock.send(data.encode('utf-8'))
         except WebSocketDisconnect:
             pass
     except Exception as e:
