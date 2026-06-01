@@ -48,6 +48,25 @@ async def lifespan(application: FastAPI):
     try:
         ensure_default_network(db, admin.id)
         ensure_default_security_group(db, admin.id)
+
+        # Connect Nginx to all existing networks
+        try:
+            import docker
+            from compute import get_engine
+            eng = get_engine()
+            gw = eng.client.containers.get("cloud-gateway")
+            networks = db.query(Network).all()
+            for net in networks:
+                try:
+                    eng.client.networks.get(net.docker_name).connect(gw)
+                except docker.errors.APIError as e:
+                    if "already exists in network" not in str(e):
+                        log.warning(f"Gagal menghubungkan Nginx ke {net.docker_name}: {e}")
+                except Exception:
+                    pass
+        except Exception as e:
+            log.warning(f"Gagal setup gateway networks: {e}")
+
     except Exception as e:
         log.error(f"Gagal memastikan default network/sg: {e}")
     db.close()

@@ -163,6 +163,14 @@ def create_network(body: NetworkCreate, user: User = Depends(get_current_user),
                    db: Session = Depends(get_db)):
     docker_name = f"iaas-net-{uuid.uuid4().hex[:8]}"
     result = get_engine().create_network(docker_name, body.cidr, body.gateway)
+    
+    # Hubungkan cloud-gateway (Nginx) ke network kustom ini agar Ingress bisa berfungsi
+    try:
+        get_engine().client.networks.get(docker_name).connect("cloud-gateway")
+    except Exception as e:
+        import logging
+        logging.getLogger("iaas.api").warning(f"Gagal menghubungkan Nginx ke {docker_name}: {e}")
+
     net = Network(
         id=str(uuid.uuid4()),
         name=body.name,
