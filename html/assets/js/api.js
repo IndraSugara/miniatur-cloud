@@ -189,6 +189,9 @@ export const computeApi = {
   createSnapshot: (id, name) =>
     request(`/instances/${id}/snapshot`, { method: "POST", body: { name } }),
   deleteSnapshot: (id) => request(`/snapshots/${id}`, { method: "DELETE" }),
+  expose: (id, port, description) =>
+    request(`/instances/${id}/expose`, { method: "POST", body: { port, description } }),
+  unexpose: (id) => request(`/instances/${id}/expose`, { method: "DELETE" }),
 };
 
 export const networkApi = {

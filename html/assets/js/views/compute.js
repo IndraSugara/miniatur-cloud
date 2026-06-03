@@ -77,7 +77,7 @@ export const computeView = {
                 <th>Status</th>
                 <th>Image</th>
                 <th>Type</th>
-                <th>Network</th>
+                <th>Public URL</th>
                 <th>SSH/Endpoint</th>
                 <th>Created</th>
                 <th>Actions</th>
@@ -223,7 +223,10 @@ export const computeView = {
               <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
-              <td class="mono">${escapeHtml(resolveNetworkName(item.network_id))}</td>
+              <td>${item.public_url
+                ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono" style="color:var(--primary);font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
+                : '<span class="dim">—</span>'
+              }</td>
               <td class="mono">${escapeHtml(item.public_endpoint || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
               <td>${toLocalDate(item.created_at)}</td>
               <td>
@@ -234,6 +237,16 @@ export const computeView = {
                   ${
                     item.status === "running"
                       ? `<button class="btn btn-inline" data-action="console" data-id="${item.id}">Console</button>`
+                      : ""
+                  }
+                  ${
+                    item.status === "running" && !item.public_url
+                      ? `<button class="btn btn-inline" data-action="expose" data-id="${item.id}" style="color:var(--primary);">Expose</button>`
+                      : ""
+                  }
+                  ${
+                    item.public_url
+                      ? `<button class="btn btn-inline btn-danger" data-action="unexpose" data-id="${item.id}">Unexpose</button>`
                       : ""
                   }
                   <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snapshot</button>
@@ -336,6 +349,33 @@ export const computeView = {
               <div class="dim">Tags</div>
               <div>${renderTags(detail.tags)}</div>
             </div>
+            <div style="grid-column:1/-1;">
+              <div class="dim">Public URL</div>
+              <div>${detail.public_url
+                ? `<a href="${escapeHtml(detail.public_url)}" target="_blank" style="color:var(--primary);">${escapeHtml(detail.public_url)}</a> <span class="dim">(port ${detail.expose_port})</span>`
+                : '<span class="dim">Not exposed</span>'
+              }</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:6px;">
+            <div class="dim" style="margin-bottom:8px;">Expose App to Internet</div>
+            ${detail.public_url ? `
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="mono" style="font-size:0.85rem;">🌐 <a href="${escapeHtml(detail.public_url)}" target="_blank" style="color:var(--primary);">${escapeHtml(detail.public_hostname)}</a></span>
+                <span class="dim">→ port ${detail.expose_port}</span>
+                <button id="modal-unexpose" class="btn btn-inline btn-danger">Unexpose</button>
+              </div>
+            ` : `
+              <div class="grid grid-2" style="gap:8px;align-items:end;">
+                <div>
+                  <label class="field-label" style="font-size:0.75rem;">App Port (e.g. 3000, 8080)</label>
+                  <input id="modal-expose-port" type="number" min="1" max="65535" value="8080" style="width:100%;" />
+                </div>
+                <div>
+                  <button id="modal-expose-btn" class="btn btn-primary" style="width:100%;">Expose to Internet</button>
+                </div>
+              </div>
+            `}
           </div>
           <div id="instance-metrics" style="margin-top:12px;">
             <div class="dim"><span class="spinner"></span> Memuat metrics…</div>
@@ -466,6 +506,48 @@ export const computeView = {
           msg.textContent = extractMessage(error);
         }
       });
+
+      // ── Expose / Unexpose handlers ──────────────────────────
+      const exposeBtn = modalRoot.querySelector("#modal-expose-btn");
+      const unexposeBtn = modalRoot.querySelector("#modal-unexpose");
+
+      if (exposeBtn) {
+        exposeBtn.addEventListener("click", async () => {
+          const port = parseInt(modalRoot.querySelector("#modal-expose-port").value);
+          if (!port || port < 1 || port > 65535) {
+            msg.className = "message error";
+            msg.textContent = "Port harus antara 1 dan 65535.";
+            return;
+          }
+          try {
+            const result = await withLoading(exposeBtn, "Exposing...", async () =>
+              apis.compute.expose(instanceId, port)
+            );
+            toast(`Instance exposed: ${result.public_url}`);
+            modal.close();
+            await reloadAll();
+          } catch (error) {
+            msg.className = "message error";
+            msg.textContent = extractMessage(error);
+          }
+        });
+      }
+
+      if (unexposeBtn) {
+        unexposeBtn.addEventListener("click", async () => {
+          try {
+            await withLoading(unexposeBtn, "Removing...", async () =>
+              apis.compute.unexpose(instanceId)
+            );
+            toast("Public URL dihapus.");
+            modal.close();
+            await reloadAll();
+          } catch (error) {
+            msg.className = "message error";
+            msg.textContent = extractMessage(error);
+          }
+        });
+      }
     }
 
     async function openLogsModal(instanceId) {
@@ -673,6 +755,49 @@ export const computeView = {
               },
             ],
           });
+        }
+        if (action === "expose") {
+          const modal = showModal({
+            title: "Expose App to Internet",
+            bodyHtml: `
+              <label class="field-label" for="table-expose-port">App Port (e.g. 3000, 8080)</label>
+              <input id="table-expose-port" type="number" min="1" max="65535" value="8080" />
+            `,
+            actions: [
+              {
+                label: "Expose",
+                className: "btn btn-primary",
+                onClick: async ({ close, button }) => {
+                  const port = parseInt(modal.wrapper.querySelector("#table-expose-port").value);
+                  if (!port || port < 1 || port > 65535) {
+                    toast("Port harus antara 1 dan 65535.", "error");
+                    return;
+                  }
+                  try {
+                    await withLoading(button, "Exposing...", async () =>
+                      apis.compute.expose(id, port)
+                    );
+                    toast("Instance exposed ke internet.");
+                    close();
+                    await reloadAll();
+                  } catch (err) {
+                    toast(extractMessage(err), "error");
+                  }
+                },
+              },
+            ],
+          });
+          return;
+        }
+        if (action === "unexpose") {
+          if (!window.confirm("Hapus public URL?")) return;
+          try {
+            await apis.compute.unexpose(id);
+            toast("Public URL dihapus.");
+            await reloadAll();
+          } catch (err) {
+            toast(extractMessage(err), "error");
+          }
           return;
         }
         if (action === "terminate") {

@@ -239,7 +239,7 @@ export const networkView = {
         .map(
           (r) => `
             <tr>
-              <td class="mono"><a href="${escapeHtml(r.path)}" target="_blank">${escapeHtml(r.path)}</a></td>
+              <td class="mono"><a href="${escapeHtml(r.public_url || r.path)}" target="_blank">${escapeHtml(r.path)}</a></td>
               <td class="mono">${r.target_port}</td>
               <td>${escapeHtml(resolveInstanceName(r.instance_id))}</td>
               <td>
