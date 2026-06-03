@@ -206,7 +206,7 @@ services:
       MINIO_SECRET_KEY: CloudPass2024!
       MINIO_SECURE: "false"
       PUBLIC_HOST: 192.168.1.2
-      PUBLIC_DOMAIN: app.sughara.my.id
+      PUBLIC_DOMAIN: sughara.my.id
       PUBLIC_BASE_URL: "https://app.sughara.my.id"
       FLOATING_PORT_START: "2300"
       FLOATING_PORT_END: "2399"
