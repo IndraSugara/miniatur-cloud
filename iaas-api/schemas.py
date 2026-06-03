@@ -102,6 +102,12 @@ class PresignRequest(BaseModel):
     expiry_seconds: int = Field(default=3600, ge=60, le=604800)
 
 class IngressRuleCreate(BaseModel):
-    instance_id: str
-    path: str = Field(..., min_length=2, max_length=128)
-    target_port: int = Field(..., ge=1, le=65535)
+    instance_id : str
+    path        : str = Field(..., min_length=2, max_length=128)
+    target_port : int = Field(..., ge=1, le=65535)
+    description : Optional[str] = None
+
+
+class ExposePort(BaseModel):
+    port        : int = Field(..., ge=1, le=65535, description="Port yang dijalankan app di dalam instance")
+    description : Optional[str] = None

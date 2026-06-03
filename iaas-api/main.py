@@ -10,8 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import SECRET_KEY  # noqa: F401 – ensure config loads
 from database import SessionLocal
 from deps import hash_password
-from helpers import ensure_default_network, ensure_default_security_group
-from models import User
+from helpers import ensure_default_network, ensure_default_security_group, rebuild_all_nginx_subdomains
+from models import User, Network
 
 from routes.auth import router as auth_router
 from routes.compute import router as compute_router
@@ -66,6 +66,13 @@ async def lifespan(application: FastAPI):
                     pass
         except Exception as e:
             log.warning(f"Gagal setup gateway networks: {e}")
+
+        # Rebuild all nginx subdomain blocks for running instances
+        try:
+            rebuild_all_nginx_subdomains(db)
+            log.info("Nginx subdomain blocks rebuilt")
+        except Exception as e:
+            log.warning(f"Gagal rebuild nginx subdomains: {e}")
 
     except Exception as e:
         log.error(f"Gagal memastikan default network/sg: {e}")

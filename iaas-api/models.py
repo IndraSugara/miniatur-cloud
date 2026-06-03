@@ -40,10 +40,12 @@ class Instance(Base):
     ip_address     = Column(String(15), nullable=True)
     ssh_port       = Column(Integer, nullable=True)
     ssh_password   = Column(String(32), nullable=True)
-    # ── New fields ────────────────────────────────────────────
+    # ── New fields ────────────────────────────────────────────────
     status_detail  = Column(String(256), nullable=True)   # provisioning stage
     error_message  = Column(Text, nullable=True)           # user-visible error
     tags           = Column(Text, nullable=True)           # JSON-serialized dict
+    public_hostname = Column(String(256), nullable=True)   # e.g. my-web.app.sughara.my.id
+    expose_port    = Column(Integer, nullable=True)        # port that is publicly exposed
     created_at     = Column(DateTime, default=datetime.utcnow)
     updated_at     = Column(DateTime, default=datetime.utcnow)
 
@@ -131,6 +133,7 @@ class IngressRule(Base):
     id          = Column(String(36), primary_key=True)
     owner_id    = Column(String(36), nullable=False)
     instance_id = Column(String(36), nullable=False)
-    path        = Column(String(256), nullable=False)
+    path        = Column(String(256), nullable=False, unique=True)
     target_port = Column(Integer, nullable=False)
+    description = Column(String(256), nullable=True)
     created_at  = Column(DateTime, default=datetime.utcnow)

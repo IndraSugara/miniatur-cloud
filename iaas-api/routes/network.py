@@ -8,7 +8,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from compute import get_engine
-from config import PUBLIC_HOST
+from config import PUBLIC_HOST, PUBLIC_BASE_URL
 from database import get_db
 from deps import get_current_user
 from errors import (
@@ -53,6 +53,8 @@ from schemas import (
 )
 
 from helpers import sync_nginx_ingress
+
+_RESERVED_PATHS = {"/api/", "/monitor/", "/storage/", "/storage-console/", "/metrics/"}
 
 router = APIRouter(tags=["Network"])
 
@@ -428,6 +430,8 @@ def list_ingress_rules(user: User = Depends(get_current_user), db: Session = Dep
                 "path": r.path,
                 "target_port": r.target_port,
                 "instance_id": r.instance_id,
+                "description": r.description,
+                "public_url": f"{PUBLIC_BASE_URL}{r.path}",
                 "created_at": str(r.created_at),
             }
             for r in rules
@@ -443,31 +447,41 @@ def create_ingress_rule(body: IngressRuleCreate,
         not_found("Instance")
     if not user.is_admin and inst.owner_id != user.id:
         forbidden()
-        
+
     path = body.path
     if not path.startswith("/"):
         path = "/" + path
     if not path.endswith("/"):
         path = path + "/"
-        
+
+    # Guard reserved system paths
+    for reserved in _RESERVED_PATHS:
+        if path.startswith(reserved):
+            bad_request(f"Path '{path}' konflik dengan path sistem")
+
     # Check if path already exists
     exists = db.query(IngressRule).filter(IngressRule.path == path).first()
     if exists:
         conflict("Path sudah digunakan")
-        
+
     rule = IngressRule(
         id=str(uuid.uuid4()),
         owner_id=user.id,
         instance_id=inst.id,
         path=path,
         target_port=body.target_port,
+        description=body.description,
     )
     db.add(rule)
     db.commit()
-    
-    # Sync nginx
+
     sync_nginx_ingress(db)
-    return {"ingress_rule_id": rule.id, "path": rule.path}
+    return {
+        "ingress_rule_id": rule.id,
+        "path": rule.path,
+        "public_url": f"{PUBLIC_BASE_URL}{rule.path}",
+        "description": rule.description,
+    }
 
 @router.delete("/ingress-rules/{rid}")
 def delete_ingress_rule(rid: str, user: User = Depends(get_current_user),

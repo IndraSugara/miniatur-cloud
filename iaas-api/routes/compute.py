@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, WebSocket, WebSo
 from sqlalchemy.orm import Session
 
 from compute import get_engine, INSTANCE_TYPES, DOCKER_NETWORK
-from config import PUBLIC_HOST
+from config import PUBLIC_HOST, PUBLIC_BASE_URL, PUBLIC_DOMAIN
 from database import SessionLocal, get_db
 from deps import get_current_user, get_current_user_from_token_str
 from errors import (
@@ -27,6 +27,7 @@ from helpers import (
     allocate_ssh_port,
     build_volume_mounts,
     detach_all_volumes,
+    ensure_gateway_connected_to_network,
     get_attached_public_endpoint,
     get_default_network,
     get_default_security_group,
@@ -37,6 +38,8 @@ from helpers import (
     resolve_image_for_user,
     security_group_allows_port,
     sync_nginx_ingress,
+    sync_nginx_subdomain,
+    _slugify,
 )
 from models import (
     PublicEndpoint,
@@ -47,8 +50,9 @@ from models import (
     User,
     Volume,
     VolumeAttachment,
+    IngressRule,
 )
-from schemas import ExecCommand, InstanceAction, InstanceCreate, InstanceTagsUpdate, SnapshotCreate
+from schemas import ExecCommand, ExposePort, InstanceAction, InstanceCreate, InstanceTagsUpdate, SnapshotCreate
 
 log = logging.getLogger("iaas.compute")
 audit = logging.getLogger("iaas.audit")
@@ -91,6 +95,9 @@ def list_instances(user: User = Depends(get_current_user), db: Session = Depends
          "network_id": i.network_id,
          "security_group_id": i.security_group_id,
          "public_endpoint": f"{PUBLIC_HOST}:{ep_map[i.id].public_port}" if i.id in ep_map else None,
+         "public_hostname": i.public_hostname,
+         "public_url": f"https://{i.public_hostname}" if i.public_hostname else None,
+         "expose_port": i.expose_port,
          "tags": _parse_tags(i.tags),
          "created_at": str(i.created_at)}
         for i in instances
@@ -283,6 +290,7 @@ def get_instance(iid: str, user: User = Depends(get_current_user),
     if inst.owner_id != user.id and not user.is_admin:
         forbidden()
     ep = get_attached_public_endpoint(db, inst.id)
+    ingress_rules = db.query(IngressRule).filter(IngressRule.instance_id == iid).all()
     return {
         "id": inst.id, "name": inst.name, "status": inst.status,
         "status_detail": inst.status_detail,
@@ -293,9 +301,22 @@ def get_instance(iid: str, user: User = Depends(get_current_user),
         "network_id": inst.network_id,
         "security_group_id": inst.security_group_id,
         "public_endpoint": f"{PUBLIC_HOST}:{ep.public_port}" if ep else None,
+        "public_hostname": inst.public_hostname,
+        "public_url": f"https://{inst.public_hostname}" if inst.public_hostname else None,
+        "expose_port": inst.expose_port,
         "ssh_command": f"ssh root@{PUBLIC_HOST} -p {inst.ssh_port}" if inst.ssh_port else None,
         "ssh_password": inst.ssh_password,
         "tags": _parse_tags(inst.tags),
+        "ingress_rules": [
+            {
+                "id": r.id,
+                "path": r.path,
+                "target_port": r.target_port,
+                "description": r.description,
+                "public_url": f"{PUBLIC_BASE_URL}{r.path}",
+            }
+            for r in ingress_rules
+        ],
         "created_at": str(inst.created_at),
     }
 
@@ -379,7 +400,11 @@ def instance_action(iid: str, body: InstanceAction,
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running (rebooted)"
         sync_nginx_ingress(db)
+        sync_nginx_subdomain(db, inst)
     elif action == "terminate":
+        inst.public_hostname = None
+        inst.expose_port = None
+        sync_nginx_subdomain(db, inst)
         eng.terminate_instance(inst.container_id)
         inst.status = InstanceStatus.TERMINATED
         inst.status_detail = "Terminated"
@@ -394,6 +419,72 @@ def instance_action(iid: str, body: InstanceAction,
     audit.info("INSTANCE_%s user=%s instance=%s",
                action.upper(), user.username, iid[:8])
     return {"message": f"Action '{action}' berhasil", "status": inst.status, "status_detail": inst.status_detail}
+
+
+@router.post("/instances/{iid}/expose", status_code=201)
+def expose_instance(iid: str, body: ExposePort,
+                    user: User = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
+    """Expose an instance app port via a public subdomain.
+    Returns a public URL like https://<name>.app.sughara.my.id
+    """
+    inst = db.query(Instance).filter(Instance.id == iid).first()
+    if not inst:
+        not_found("Instance")
+    if inst.owner_id != user.id and not user.is_admin:
+        forbidden()
+    if inst.status != InstanceStatus.RUNNING:
+        bad_request("Instance harus dalam status running")
+    if not inst.ip_address:
+        bad_request("Instance belum memiliki IP address")
+
+    slug = _slugify(inst.name)
+    hostname = f"{slug}.{PUBLIC_DOMAIN}"
+
+    if inst.network_id:
+        net = db.query(Network).filter(Network.id == inst.network_id).first()
+        if net:
+            ensure_gateway_connected_to_network(net.docker_name)
+
+    inst.public_hostname = hostname
+    inst.expose_port = body.port
+    inst.updated_at = datetime.utcnow()
+    db.commit()
+    sync_nginx_subdomain(db, inst)
+
+    audit.info("INSTANCE_EXPOSE user=%s instance=%s hostname=%s port=%d",
+               user.username, iid[:8], hostname, body.port)
+    return {
+        "public_hostname": hostname,
+        "public_url": f"https://{hostname}",
+        "expose_port": body.port,
+        "message": f"Instance dapat diakses di https://{hostname}",
+    }
+
+
+@router.delete("/instances/{iid}/expose")
+def unexpose_instance(iid: str,
+                      user: User = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    """Remove the public subdomain from an instance."""
+    inst = db.query(Instance).filter(Instance.id == iid).first()
+    if not inst:
+        not_found("Instance")
+    if inst.owner_id != user.id and not user.is_admin:
+        forbidden()
+    if not inst.public_hostname:
+        bad_request("Instance belum memiliki public hostname")
+
+    old_hostname = inst.public_hostname
+    inst.public_hostname = None
+    inst.expose_port = None
+    inst.updated_at = datetime.utcnow()
+    db.commit()
+    sync_nginx_subdomain(db, inst)
+
+    audit.info("INSTANCE_UNEXPOSE user=%s instance=%s hostname=%s",
+               user.username, iid[:8], old_hostname)
+    return {"message": f"Public hostname {old_hostname} dihapus"}
 
 
 @router.post("/instances/{iid}/exec")

@@ -15,6 +15,8 @@ from config import (
     MINIO_ENDPOINT,
     MINIO_SECRET_KEY,
     MINIO_SECURE,
+    PUBLIC_BASE_URL,
+    PUBLIC_DOMAIN,
 )
 from compute import get_engine, AVAILABLE_IMAGES, DOCKER_NETWORK, _resolve_docker_image
 from errors import (
@@ -346,37 +348,155 @@ def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network
 
 
 # ── Ingress Routing ────────────────────────────────────────────
+import logging as _logging
+_hlog = _logging.getLogger("iaas.helpers")
+
+# Paths that must not be overridden by user ingress rules
+_RESERVED_PATHS = {"/api/", "/monitor/", "/storage/", "/storage-console/", "/metrics/"}
+
+
+def _slugify(name: str) -> str:
+    """Convert instance name to a safe DNS label."""
+    import re
+    slug = re.sub(r"[^a-z0-9-]", "-", name.lower())
+    slug = re.sub(r"-+", "-", slug).strip("-")
+    return slug[:50] or "instance"
+
+
+def ensure_gateway_connected_to_network(docker_name: str):
+    """Connect cloud-gateway to the given Docker network so Nginx can reach containers."""
+    import docker as _docker
+    try:
+        eng = get_engine()
+        gw  = eng.client.containers.get("cloud-gateway")
+        net = eng.client.networks.get(docker_name)
+        net.connect(gw)
+    except _docker.errors.APIError as e:
+        if "already exists in network" not in str(e):
+            _hlog.warning(f"Gateway connect to {docker_name}: {e}")
+    except Exception as e:
+        _hlog.warning(f"Gateway network connect skipped: {e}")
+
+
+def _nginx_server_block(hostname: str, container_ip: str, port: int) -> str:
+    """Generate a Nginx server block for a specific instance subdomain."""
+    return f"""server {{
+    listen 80;
+    server_name {hostname};
+
+    location / {{
+        proxy_pass          http://{container_ip}:{port}/;
+        proxy_set_header    Host $host;
+        proxy_set_header    X-Real-IP $remote_addr;
+        proxy_set_header    X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header    X-Forwarded-Proto $scheme;
+        proxy_http_version  1.1;
+        proxy_set_header    Upgrade $http_upgrade;
+        proxy_set_header    Connection "upgrade";
+        proxy_read_timeout  300s;
+        proxy_connect_timeout 10s;
+    }}
+}}
+"""
+
+
+def sync_nginx_subdomain(db: Session, instance: "Instance"):
+    """Write / remove the per-instance Nginx server block and reload Nginx.
+
+    Call this whenever an instance expose_port or public_hostname changes.
+    """
+    import os
+    subdomains_dir = "/app/ingress/subdomains"
+    os.makedirs(subdomains_dir, exist_ok=True)
+    conf_path = os.path.join(subdomains_dir, f"{instance.id}.conf")
+
+    # Remove stale file when instance is no longer exposed / running
+    if not instance.public_hostname or not instance.expose_port or not instance.ip_address:
+        if os.path.exists(conf_path):
+            os.remove(conf_path)
+            _reload_nginx()
+        return
+
+    block = _nginx_server_block(instance.public_hostname, instance.ip_address, instance.expose_port)
+    with open(conf_path, "w") as f:
+        f.write(block)
+    _hlog.info(f"Nginx subdomain block written: {instance.public_hostname} -> {instance.ip_address}:{instance.expose_port}")
+    _reload_nginx()
+
+
+def rebuild_all_nginx_subdomains(db: Session):
+    """Rebuild ALL per-instance subdomain blocks (call on startup / bulk sync)."""
+    import os
+    subdomains_dir = "/app/ingress/subdomains"
+    os.makedirs(subdomains_dir, exist_ok=True)
+
+    # Remove old files first
+    for fname in os.listdir(subdomains_dir):
+        if fname.endswith(".conf"):
+            os.remove(os.path.join(subdomains_dir, fname))
+
+    instances = db.query(Instance).filter(
+        Instance.public_hostname.isnot(None),
+        Instance.expose_port.isnot(None),
+        Instance.ip_address.isnot(None),
+        Instance.status == InstanceStatus.RUNNING,
+    ).all()
+
+    for inst in instances:
+        if inst.network_id:
+            net = db.query(Network).filter(Network.id == inst.network_id).first()
+            if net:
+                ensure_gateway_connected_to_network(net.docker_name)
+        conf_path = os.path.join(subdomains_dir, f"{inst.id}.conf")
+        block = _nginx_server_block(inst.public_hostname, inst.ip_address, inst.expose_port)
+        with open(conf_path, "w") as f:
+            f.write(block)
+
+    _reload_nginx()
+    _hlog.info(f"Rebuilt {len(instances)} nginx subdomain blocks")
+
+
+def _reload_nginx():
+    """Signal Nginx to reload config without downtime."""
+    try:
+        container = get_engine().client.containers.get("cloud-gateway")
+        res = container.exec_run("nginx -s reload")
+        if res.exit_code != 0:
+            _hlog.warning(f"Nginx reload warning: {res.output.decode()[:200]}")
+    except Exception as e:
+        _hlog.error(f"Nginx reload error: {e}")
+
+
+# ── Legacy: path-based ingress rules (kept for backward-compat) ────────────
 def sync_nginx_ingress(db: Session):
+    """Rewrite /app/ingress/routes.conf for path-based ingress rules and reload Nginx."""
     import os
     rules = db.query(IngressRule).all()
-    
+
     config_lines = []
     for rule in rules:
         inst = db.query(Instance).filter(Instance.id == rule.instance_id).first()
-        if inst and inst.ip_address:
-            # Generate the location block
+        if inst and inst.ip_address and inst.status == InstanceStatus.RUNNING:
+            if inst.network_id:
+                net = db.query(Network).filter(Network.id == inst.network_id).first()
+                if net:
+                    ensure_gateway_connected_to_network(net.docker_name)
             config_lines.append(f"location {rule.path} {{")
             config_lines.append(f"    proxy_pass http://{inst.ip_address}:{rule.target_port}/;")
             config_lines.append(f"    proxy_set_header Host $host;")
             config_lines.append(f"    proxy_set_header X-Real-IP $remote_addr;")
             config_lines.append(f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
             config_lines.append(f"    proxy_set_header X-Forwarded-Proto $scheme;")
+            config_lines.append(f"    proxy_http_version 1.1;")
+            config_lines.append(f"    proxy_set_header Upgrade $http_upgrade;")
+            config_lines.append(f"    proxy_set_header Connection 'upgrade';")
+            config_lines.append(f"    proxy_read_timeout 300s;")
             config_lines.append("}")
-    
-    config_content = "\n".join(config_lines)
-    
-    # Write to the shared volume
+
     ingress_dir = "/app/ingress"
     os.makedirs(ingress_dir, exist_ok=True)
     conf_path = os.path.join(ingress_dir, "routes.conf")
     with open(conf_path, "w") as f:
-        f.write(config_content)
-    
-    # Reload Nginx via Docker Exec
-    try:
-        container = get_engine().client.containers.get("cloud-gateway")
-        res = container.exec_run("nginx -s reload")
-        if res.exit_code != 0:
-            print("Failed to reload Nginx:", res.output)
-    except Exception as e:
-        print("Error reloading Nginx:", e)
+        f.write("\n".join(config_lines))
+
+    _reload_nginx()
