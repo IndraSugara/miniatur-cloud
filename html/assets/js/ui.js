@@ -53,7 +53,7 @@ export function showModal({ title, bodyHtml, actions = [] }) {
     const button = document.createElement("button");
     button.className = action.className || "btn";
     button.textContent = action.label;
-    button.addEventListener("click", () => action.onClick({ close, wrapper }));
+    button.addEventListener("click", () => action.onClick({ close, wrapper, button }));
     footer.appendChild(button);
   });
 
