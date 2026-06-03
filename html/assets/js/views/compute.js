@@ -77,7 +77,6 @@ export const computeView = {
                 <th>Status</th>
                 <th>Image</th>
                 <th>Type</th>
-                <th>Network</th>
                 <th>Public URL</th>
                 <th>SSH/Endpoint</th>
                 <th>Created</th>
@@ -224,7 +223,6 @@ export const computeView = {
               <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
-              <td class="mono">${escapeHtml(resolveNetworkName(item.network_id))}</td>
               <td>${item.public_url
                 ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono" style="color:var(--primary);font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
                 : '<span class="dim">—</span>'
@@ -732,6 +730,26 @@ export const computeView = {
           }
           return;
         }
+        if (action === "expose") {
+          const port = window.prompt("Port yang dijalankan app di instance (contoh: 3000, 8080):", "8080");
+          if (!port) return;
+          const portNum = parseInt(port);
+          if (!portNum || portNum < 1 || portNum > 65535) {
+            toast("Port harus antara 1 dan 65535.", "error");
+            return;
+          }
+          const result = await apis.compute.expose(id, portNum);
+          toast(`Exposed: ${result.public_url}`);
+          await reloadAll();
+          return;
+        }
+        if (action === "unexpose") {
+          if (!window.confirm("Hapus public URL dari instance ini?")) return;
+          await apis.compute.unexpose(id);
+          toast("Public URL dihapus.");
+          await reloadAll();
+          return;
+        }
         if (action === "snapshot") {
           const modal = showModal({
             title: "Create Snapshot",
@@ -757,49 +775,6 @@ export const computeView = {
               },
             ],
           });
-        }
-        if (action === "expose") {
-          const modal = showModal({
-            title: "Expose App to Internet",
-            bodyHtml: `
-              <label class="field-label" for="table-expose-port">App Port (e.g. 3000, 8080)</label>
-              <input id="table-expose-port" type="number" min="1" max="65535" value="8080" />
-            `,
-            actions: [
-              {
-                label: "Expose",
-                className: "btn btn-primary",
-                onClick: async ({ close, button }) => {
-                  const port = parseInt(modal.wrapper.querySelector("#table-expose-port").value);
-                  if (!port || port < 1 || port > 65535) {
-                    toast("Port harus antara 1 dan 65535.", "error");
-                    return;
-                  }
-                  try {
-                    await withLoading(button, "Exposing...", async () =>
-                      apis.compute.expose(id, port)
-                    );
-                    toast("Instance exposed ke internet.");
-                    close();
-                    await reloadAll();
-                  } catch (err) {
-                    toast(extractMessage(err), "error");
-                  }
-                },
-              },
-            ],
-          });
-          return;
-        }
-        if (action === "unexpose") {
-          if (!window.confirm("Hapus public URL?")) return;
-          try {
-            await apis.compute.unexpose(id);
-            toast("Public URL dihapus.");
-            await reloadAll();
-          } catch (err) {
-            toast(extractMessage(err), "error");
-          }
           return;
         }
         if (action === "terminate") {
