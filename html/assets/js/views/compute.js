@@ -77,6 +77,7 @@ export const computeView = {
                 <th>Status</th>
                 <th>Image</th>
                 <th>Type</th>
+                <th>Network</th>
                 <th>Public URL</th>
                 <th>SSH/Endpoint</th>
                 <th>Created</th>
@@ -223,6 +224,7 @@ export const computeView = {
               <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
+              <td class="mono">${escapeHtml(resolveNetworkName(item.network_id))}</td>
               <td>${item.public_url
                 ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono" style="color:var(--primary);font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
                 : '<span class="dim">—</span>'
