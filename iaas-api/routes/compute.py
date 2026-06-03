@@ -632,6 +632,8 @@ async def instance_terminal(websocket: WebSocket, iid: str, token: str):
         try:
             while True:
                 data = await websocket.receive_text()
+                if data == "__PING__":
+                    continue
                 encoded = data.encode('utf-8')
                 if hasattr(raw_sock, 'send'):
                     raw_sock.send(encoded)

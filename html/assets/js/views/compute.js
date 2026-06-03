@@ -693,8 +693,14 @@ export const computeView = {
           const wsUrl = `${protocol}//${window.location.host}/api/instances/${id}/terminal?token=${token}`;
           
           const ws = new WebSocket(wsUrl);
+          let pingInterval;
           ws.onopen = () => {
              term.writeln('\\r\\n*** Connected to instance ***\\r\\n');
+             pingInterval = setInterval(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                   ws.send("__PING__");
+                }
+             }, 30000);
           };
           ws.onmessage = (evt) => {
              term.write(evt.data);
@@ -705,6 +711,7 @@ export const computeView = {
              }
           });
           ws.onclose = () => {
+             if (pingInterval) clearInterval(pingInterval);
              term.writeln('\\r\\n*** Disconnected ***\\r\\n');
           };
           ws.onerror = () => {
@@ -714,6 +721,7 @@ export const computeView = {
           // Handle cleanup on modal close
           const oldClose = modal.close;
           modal.close = () => {
+             if (pingInterval) clearInterval(pingInterval);
              if (ws.readyState === WebSocket.OPEN) ws.close();
              term.dispose();
              oldClose();
