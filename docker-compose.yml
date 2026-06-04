@@ -194,8 +194,6 @@ services:
     volumes:
       - ./sshpiper:/etc/sshpiper
     command:
-      - --address
-      - 0.0.0.0:2222
       - --log-level
       - info
       - --server-key-generate-mode
