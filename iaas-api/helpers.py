@@ -544,10 +544,12 @@ def sync_sshpiper_config(db: Session):
     ]
 
     for inst in instances:
+        if not inst.ssh_port:
+            continue
         pipe = {
             "from": [{"username": inst.id[:8]}],
             "to": {
-                "host": f"{inst.ip_address}:22",
+                "host": f"{PUBLIC_HOST}:{inst.ssh_port}",
                 "username": "root",
                 "ignore_hostkey": True,
             },
