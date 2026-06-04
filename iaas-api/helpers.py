@@ -526,10 +526,18 @@ def sync_sshpiper_config(db: Session):
     # Static routes untuk host Jetson
     pipes = [
         {
-            "from": [{"username_regex": "^(sugara-jetson|root)$"}],
+            "from": [{"username": "sugara-jetson"}],
             "to": {
                 "host": f"{PUBLIC_HOST}:2200",
-                "username": "$1",
+                "username": "sugara-jetson",
+                "ignore_hostkey": True,
+            }
+        },
+        {
+            "from": [{"username": "root"}],
+            "to": {
+                "host": f"{PUBLIC_HOST}:2200",
+                "username": "root",
                 "ignore_hostkey": True,
             }
         }

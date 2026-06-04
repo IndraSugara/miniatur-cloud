@@ -3,3 +3,4 @@
 __pycache__/
 nginx/ingress/
 iaas-api/ingress/
+sshpiper/sshpiperd.yaml
