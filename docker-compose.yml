@@ -200,7 +200,7 @@ services:
       - info
       - --server-key-generate-mode
       - notexist
-      - --server-key-file
+      - --server-key
       - /etc/sshpiper/ssh_host_key
       - yaml
       - --config
