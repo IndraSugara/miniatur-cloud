@@ -185,6 +185,33 @@ services:
     mem_limit: 64m
     restart: unless-stopped
 
+  # ── SSH Proxy (sshpiper) ────────────────────────────────────
+  sshpiper:
+    image: farmer1992/sshpiperd:latest
+    container_name: cloud-sshpiper
+    ports:
+      - "22:2222"
+    volumes:
+      - ./sshpiper:/etc/sshpiper
+    entrypoint: /sshpiperd
+    command:
+      - --address
+      - 0.0.0.0:2222
+      - --log-level
+      - info
+      - --server-key-generate-mode
+      - notexist
+      - --server-key-file
+      - /etc/sshpiper/ssh_host_key
+      - yaml
+      - --config
+      - /etc/sshpiper/sshpiperd.yaml
+      - --no-check-perm
+    networks:
+      - cloud-net
+    mem_limit: 64m
+    restart: unless-stopped
+
   # ── Core API ──────────────────────────────────────────────
   iaas-api:
     build:
@@ -197,6 +224,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./iaas-api:/app
       - ./nginx/ingress:/app/ingress
+      - ./sshpiper:/app/sshpiper
     environment:
       SECRET_KEY: iaas-jetson-rahasia-ganti-ini
       DATABASE_URL: postgresql://clouduser:CloudPass2024!@cloud-db:5432/clouddb
@@ -211,6 +239,8 @@ services:
       FLOATING_PORT_START: "2300"
       FLOATING_PORT_END: "2399"
       REDIS_URL: redis://cloud-cache:6379/0
+      SSH_PROXY_DOMAIN: ssh.sughara.my.id
+      SSH_PROXY_PORT: "22"
     networks:
       - cloud-net
     depends_on:

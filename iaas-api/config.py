@@ -38,3 +38,7 @@ PUBLIC_BASE_URL     = os.getenv("PUBLIC_BASE_URL", "https://app.sughara.my.id")
 FLOATING_PORT_START = int(os.getenv("FLOATING_PORT_START", "2300"))
 FLOATING_PORT_END   = int(os.getenv("FLOATING_PORT_END", "2399"))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+
+# ── SSH Proxy (sshpiper) ─────────────────────────────────
+SSH_PROXY_DOMAIN    = os.getenv("SSH_PROXY_DOMAIN", "ssh.sughara.my.id")
+SSH_PROXY_PORT      = int(os.getenv("SSH_PROXY_PORT", "22"))

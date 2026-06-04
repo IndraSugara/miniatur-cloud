@@ -332,6 +332,7 @@ export const computeView = {
             <div>
               <div class="dim">SSH Command</div>
               <div class="mono">${escapeHtml(detail.ssh_command || "-")}</div>
+              ${detail.ssh_command_direct ? `<div class="dim" style="font-size:0.7rem;margin-top:4px;">Direct: ${escapeHtml(detail.ssh_command_direct)}</div>` : ""}
             </div>
             <div>
               <div class="dim">SSH Password</div>

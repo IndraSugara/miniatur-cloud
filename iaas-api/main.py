@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from config import SECRET_KEY  # noqa: F401 – ensure config loads
 from database import SessionLocal
 from deps import hash_password
-from helpers import ensure_default_network, ensure_default_security_group, rebuild_all_nginx_subdomains
+from helpers import ensure_default_network, ensure_default_security_group, rebuild_all_nginx_subdomains, sync_sshpiper_config
 from models import User, Network
 
 from routes.auth import router as auth_router
@@ -73,6 +73,13 @@ async def lifespan(application: FastAPI):
             log.info("Nginx subdomain blocks rebuilt")
         except Exception as e:
             log.warning(f"Gagal rebuild nginx subdomains: {e}")
+
+        # Sync sshpiper config for running instances
+        try:
+            sync_sshpiper_config(db)
+            log.info("sshpiper config synced")
+        except Exception as e:
+            log.warning(f"Gagal sync sshpiper config: {e}")
 
     except Exception as e:
         log.error(f"Gagal memastikan default network/sg: {e}")

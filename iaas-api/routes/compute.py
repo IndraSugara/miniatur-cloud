@@ -11,7 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Query, WebSocket, WebSo
 from sqlalchemy.orm import Session
 
 from compute import get_engine, INSTANCE_TYPES, DOCKER_NETWORK
-from config import PUBLIC_HOST, PUBLIC_BASE_URL, PUBLIC_DOMAIN
+from config import PUBLIC_HOST, PUBLIC_BASE_URL, PUBLIC_DOMAIN, SSH_PROXY_DOMAIN, SSH_PROXY_PORT
 from database import SessionLocal, get_db
 from deps import get_current_user, get_current_user_from_token_str
 from errors import (
@@ -39,6 +39,7 @@ from helpers import (
     security_group_allows_port,
     sync_nginx_ingress,
     sync_nginx_subdomain,
+    sync_sshpiper_config,
     _slugify,
 )
 from models import (
@@ -266,6 +267,7 @@ def _create_container(iid, name, image_key, itype, owner_id, network_id, ssh_por
         inst.error_message = None
         inst.updated_at   = datetime.utcnow()
         db.commit()
+        sync_sshpiper_config(db)
         log.info(f"Instance {iid[:8]} running — SSH port {result['ssh_port']}")
     except Exception as e:
         inst = db.query(Instance).filter(Instance.id == iid).first()
@@ -304,7 +306,8 @@ def get_instance(iid: str, user: User = Depends(get_current_user),
         "public_hostname": inst.public_hostname,
         "public_url": f"https://{inst.public_hostname}" if inst.public_hostname else None,
         "expose_port": inst.expose_port,
-        "ssh_command": f"ssh root@{PUBLIC_HOST} -p {inst.ssh_port}" if inst.ssh_port else None,
+        "ssh_command": f"ssh {inst.id[:8]}@{SSH_PROXY_DOMAIN}" + (f" -p {SSH_PROXY_PORT}" if SSH_PROXY_PORT != 22 else "") if inst.ssh_port else None,
+        "ssh_command_direct": f"ssh root@{PUBLIC_HOST} -p {inst.ssh_port}" if inst.ssh_port else None,
         "ssh_password": inst.ssh_password,
         "tags": _parse_tags(inst.tags),
         "ingress_rules": [
@@ -389,10 +392,12 @@ def instance_action(iid: str, body: InstanceAction,
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running"
         sync_nginx_ingress(db)
+        sync_sshpiper_config(db)
     elif action == "stop":
         eng.stop_instance(inst.container_id)
         inst.status = InstanceStatus.STOPPED
         inst.status_detail = "Stopped by user"
+        sync_sshpiper_config(db)
     elif action == "reboot":
         ip = eng.restart_instance(inst.container_id)
         if ip:
@@ -401,6 +406,7 @@ def instance_action(iid: str, body: InstanceAction,
         inst.status_detail = "Running (rebooted)"
         sync_nginx_ingress(db)
         sync_nginx_subdomain(db, inst)
+        sync_sshpiper_config(db)
     elif action == "terminate":
         inst.public_hostname = None
         inst.expose_port = None
@@ -411,6 +417,7 @@ def instance_action(iid: str, body: InstanceAction,
         detach_all_volumes(db, inst.id)
         release_public_endpoints_for_instance(db, inst.id)
         inst.ssh_port = None
+        sync_sshpiper_config(db)
     else:
         bad_request(f"Action tidak dikenal: {action}")
 
