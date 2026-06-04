@@ -515,6 +515,7 @@ def sync_sshpiper_config(db: Session):
     sshpiper reads the YAML on each new connection, so no reload signal
     is strictly required, but we send one for good measure.
     """
+    from config import PUBLIC_HOST
     import os
 
     instances = db.query(Instance).filter(
@@ -522,7 +523,18 @@ def sync_sshpiper_config(db: Session):
         Instance.ip_address.isnot(None),
     ).all()
 
-    pipes = []
+    # Static routes untuk host Jetson
+    pipes = [
+        {
+            "from": [{"username_regex": "^(sugara-jetson|root)$"}],
+            "to": {
+                "host": f"{PUBLIC_HOST}:2200",
+                "username": "$1",
+                "ignore_hostkey": True,
+            }
+        }
+    ]
+
     for inst in instances:
         pipe = {
             "from": [{"username": inst.id[:8]}],
