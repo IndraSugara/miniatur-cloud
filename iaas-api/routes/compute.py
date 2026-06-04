@@ -446,7 +446,7 @@ def expose_instance(iid: str, body: ExposePort,
         bad_request("Instance belum memiliki IP address")
 
     slug = _slugify(inst.name)
-    hostname = f"{slug}.{PUBLIC_DOMAIN}"
+    hostname = f"{slug}-{inst.id[:8]}.{PUBLIC_DOMAIN}"
 
     if inst.network_id:
         net = db.query(Network).filter(Network.id == inst.network_id).first()
