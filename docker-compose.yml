@@ -187,7 +187,7 @@ services:
 
   # ── SSH Proxy (sshpiper) ────────────────────────────────────
   sshpiper:
-    image: farmer1992/sshpiperd:latest
+    image: farmer1992/sshpiperd:full
     container_name: cloud-sshpiper
     ports:
       - "22:2222"
@@ -200,7 +200,7 @@ services:
       - notexist
       - --server-key
       - /etc/sshpiper/ssh_host_key
-      - /sshpiperd/plugins/sshpiperd-yaml
+      - /sshpiperd/plugins/yaml
       - --config
       - /etc/sshpiper/sshpiperd.yaml
       - --no-check-perm
