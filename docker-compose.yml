@@ -193,7 +193,6 @@ services:
       - "22:2222"
     volumes:
       - ./sshpiper:/etc/sshpiper
-    entrypoint: /sshpiperd
     command:
       - --address
       - 0.0.0.0:2222
