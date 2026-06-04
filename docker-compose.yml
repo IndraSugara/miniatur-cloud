@@ -200,7 +200,7 @@ services:
       - notexist
       - --server-key
       - /etc/sshpiper/ssh_host_key
-      - yaml
+      - /sshpiperd/sshpiperd-yaml
       - --config
       - /etc/sshpiper/sshpiperd.yaml
       - --no-check-perm
