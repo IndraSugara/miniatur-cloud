@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
@@ -29,7 +29,9 @@ def summary(user: User = Depends(get_current_user), db: Session = Depends(get_db
     if user.is_admin:
         running = db.query(Instance).filter(Instance.status == "running").count()
         stopped = db.query(Instance).filter(Instance.status == "stopped").count()
-        total = db.query(Instance).count()
+        total = db.query(Instance).filter(
+            Instance.status.in_(["pending", "running", "stopped", "error"])
+        ).count()
         users = db.query(User).count()
         return {
             "scope": "global",
@@ -86,7 +88,7 @@ def list_types():
 
 @router.get("/health", tags=["System"])
 def health():
-    return {"status": "ok", "service": "Miniatur IaaS", "time": datetime.utcnow().isoformat()}
+    return {"status": "ok", "service": "Miniatur IaaS", "time": datetime.now(timezone.utc).isoformat()}
 
 
 @router.get("/api-info", tags=["System"])

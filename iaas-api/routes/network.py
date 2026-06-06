@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import or_
@@ -93,7 +93,7 @@ def update_instance_network(iid: str, body: InstanceNetworkUpdate,
 
     inst.ip_address = get_engine().get_container_network_ip(inst.container_id, net.docker_name)
     inst.network_id = net.id
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"message": "Network updated", "network_id": net.id, "ip_address": inst.ip_address}
 
@@ -122,7 +122,7 @@ def update_instance_security_group(iid: str, body: InstanceSecurityGroupUpdate,
         inst.ssh_port = allocate_ssh_port(db)
 
     inst.security_group_id = sg.id
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     if inst.container_id:

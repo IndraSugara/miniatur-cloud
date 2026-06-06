@@ -1,4 +1,4 @@
-﻿import { REFRESH_MS } from "../config.js";
+import { REFRESH_MS } from "../config.js";
 import { escapeHtml, toLocalDate } from "../utils.js";
 import { showModal, toast } from "../ui.js";
 
@@ -37,7 +37,7 @@ export const storageView = {
               </tr>
             </thead>
             <tbody id="volume-body">
-              <tr><td colspan="7" class="dim"><span class="spinner"></span> Memuat�</td></tr>
+              <tr><td colspan="7" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>
@@ -62,7 +62,7 @@ export const storageView = {
               </tr>
             </thead>
             <tbody id="bucket-body">
-              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuat�</td></tr>
+              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>

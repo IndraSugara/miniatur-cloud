@@ -40,7 +40,7 @@ class InstanceTagsUpdate(BaseModel):
 
 
 class ExecCommand(BaseModel):
-    command: str
+    command: str = Field(..., max_length=4096)
 
 
 class VolumeCreate(BaseModel):

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 import uuid
 from minio import Minio
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from config import (
@@ -116,6 +117,10 @@ def get_attached_public_endpoint(db: Session, instance_id: str) -> Optional[Publ
 
 
 def allocate_floating_port(db: Session) -> int:
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(1001)"))
+    except Exception:
+        pass
     used_ports = set(
         p[0] for p in db.query(PublicEndpoint.public_port).all()
     )
@@ -129,6 +134,10 @@ def allocate_floating_port(db: Session) -> int:
 
 
 def allocate_ssh_port(db: Session) -> int:
+    try:
+        db.execute(text("SELECT pg_advisory_xact_lock(1002)"))
+    except Exception:
+        pass
     reserved = set(
         p[0] for p in db.query(PublicEndpoint.public_port).all()
     )
@@ -154,7 +163,7 @@ def attach_public_endpoint_to_instance(db: Session, inst: Instance, ep: PublicEn
     inst.ssh_port = ep.public_port
     ep.instance_id = inst.id
     ep.status = "attached"
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     if inst.container_id:
         net = None
@@ -169,7 +178,7 @@ def detach_public_endpoint_from_instance(db: Session, inst: Instance, ep: Public
     ep.instance_id = None
     ep.status = "available"
     if inst.status == InstanceStatus.TERMINATED:
-        inst.updated_at = datetime.utcnow()
+        inst.updated_at = datetime.now(timezone.utc)
         db.commit()
         return
 
@@ -181,7 +190,7 @@ def detach_public_endpoint_from_instance(db: Session, inst: Instance, ep: Public
         inst.ssh_port = allocate_ssh_port(db)
     else:
         inst.ssh_port = None
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
 
     if inst.container_id:
@@ -338,12 +347,12 @@ def recreate_instance_with_volumes(db: Session, inst: Instance, network: Network
     inst.ssh_port     = result["ssh_port"]
     inst.ssh_password = result.get("ssh_password", inst.ssh_password)
     inst.status       = InstanceStatus.RUNNING
-    inst.updated_at   = datetime.utcnow()
+    inst.updated_at   = datetime.now(timezone.utc)
     db.commit()
     if prev_status == InstanceStatus.STOPPED:
         get_engine().stop_instance(inst.container_id)
         inst.status = InstanceStatus.STOPPED
-        inst.updated_at = datetime.utcnow()
+        inst.updated_at = datetime.now(timezone.utc)
         db.commit()
 
 

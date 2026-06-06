@@ -15,6 +15,9 @@ scrape_configs:
         refresh_interval: 10s
     relabel_configs:
       - source_labels: ['__meta_docker_container_name']
+        regex: '/iaas-.*'
+        action: drop
+      - source_labels: ['__meta_docker_container_name']
         target_label: container
         regex: '/?(.*)'
       - source_labels: ['__meta_docker_container_log_stream']

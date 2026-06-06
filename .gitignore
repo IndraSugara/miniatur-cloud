@@ -1,6 +1,7 @@
-*.md
-!*README.md
+!README.md
 __pycache__/
 nginx/ingress/
 iaas-api/ingress/
 sshpiper/sshpiperd.yaml
+.env
+iaas-api/iaas.db

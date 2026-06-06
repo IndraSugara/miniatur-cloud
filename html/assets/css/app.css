@@ -503,6 +503,10 @@ tr:hover td {
 }
 
 @media (max-width: 980px) {
+  .topbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
   .workspace {
     grid-template-columns: 1fr;
   }

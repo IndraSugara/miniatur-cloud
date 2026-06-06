@@ -77,8 +77,12 @@ async function mountView(viewId) {
     elements.viewRoot.innerHTML = `
       <section class="panel">
         <p class="message error">${error instanceof Error ? error.message : String(error)}</p>
+        <button id="error-retry-btn" class="btn btn-inline" style="margin-top:10px;">Coba Lagi</button>
       </section>
     `;
+    document.getElementById("error-retry-btn")?.addEventListener("click", () => {
+      mountView(viewId);
+    });
   }
 }
 

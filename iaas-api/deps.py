@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from config import SECRET_KEY, ALGORITHM, TOKEN_EXPIRE, REFRESH_TOKEN_EXPIRE
 from database import get_db
@@ -26,7 +26,7 @@ def create_token(data: dict):
     """Create a short-lived access token."""
     payload = data.copy()
     payload["type"] = "access"
-    payload["exp"] = datetime.utcnow() + timedelta(minutes=TOKEN_EXPIRE)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(minutes=TOKEN_EXPIRE)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -34,7 +34,7 @@ def create_refresh_token(data: dict):
     """Create a long-lived refresh token (7 days)."""
     payload = data.copy()
     payload["type"] = "refresh"
-    payload["exp"] = datetime.utcnow() + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(minutes=REFRESH_TOKEN_EXPIRE)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 

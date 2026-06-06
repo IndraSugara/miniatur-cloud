@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from config import SECRET_KEY  # noqa: F401 – ensure config loads
+from config import SECRET_KEY, PUBLIC_BASE_URL  # noqa: F401 – ensure config loads
 from database import SessionLocal
 from deps import hash_password
 from helpers import ensure_default_network, ensure_default_security_group, rebuild_all_nginx_subdomains, sync_sshpiper_config
@@ -24,6 +24,12 @@ logging.basicConfig(
     format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
 )
 log = logging.getLogger("iaas.api")
+
+audit_logger = logging.getLogger("iaas.audit")
+if not audit_logger.handlers:
+    fh = logging.FileHandler("/app/audit.log")
+    fh.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    audit_logger.addHandler(fh)
 
 
 # ── Lifespan ──────────────────────────────────────────────────
@@ -102,7 +108,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[PUBLIC_BASE_URL],
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=True,

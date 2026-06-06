@@ -69,7 +69,7 @@ export const adminView = {
               </tr>
             </thead>
             <tbody id="users-body">
-              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat�</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>

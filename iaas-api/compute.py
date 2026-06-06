@@ -119,6 +119,7 @@ class ComputeEngine:
         published_ports=None,
         status_callback=None,
         gpu=False,
+        _retry_count=0,
     ) -> dict:
         iid       = instance_id or str(uuid.uuid4())
         cname     = f"iaas-{iid[:8]}"
@@ -188,8 +189,11 @@ class ComputeEngine:
 
             # Tunggu container benar-benar running
             _report("Waiting for container to start...")
-            time.sleep(2)
-            container.reload()
+            for _ in range(10):
+                container.reload()
+                if container.status == "running":
+                    break
+                time.sleep(0.5)
 
             # Auto-setup SSH
             _report("Installing and configuring SSH...")
@@ -223,6 +227,8 @@ class ComputeEngine:
             }
 
         except docker.errors.ImageNotFound:
+            if _retry_count > 0:
+                raise RuntimeError(f"Image {image} tidak ditemukan dan tidak bisa ditarik")
             _report(f"Pulling image {image}...")
             log.info(f"Pull image {image}...")
             self.client.images.pull(image)
@@ -240,6 +246,7 @@ class ComputeEngine:
                 published_ports=published_ports,
                 status_callback=status_callback,
                 gpu=gpu,
+                _retry_count=_retry_count + 1,
             )
 
         except Exception as e:

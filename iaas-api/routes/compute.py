@@ -5,7 +5,7 @@ import logging
 import uuid
 import asyncio
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Query, WebSocket, WebSocketDisconnect
 from sqlalchemy.orm import Session
@@ -265,7 +265,7 @@ def _create_container(iid, name, image_key, itype, owner_id, network_id, ssh_por
         inst.status       = InstanceStatus.RUNNING
         inst.status_detail = "Running"
         inst.error_message = None
-        inst.updated_at   = datetime.utcnow()
+        inst.updated_at   = datetime.now(timezone.utc)
         db.commit()
         sync_sshpiper_config(db)
         log.info(f"Instance {iid[:8]} running — SSH port {result['ssh_port']}")
@@ -365,7 +365,7 @@ def update_tags(iid: str, body: InstanceTagsUpdate,
     if inst.owner_id != user.id and not user.is_admin:
         forbidden()
     inst.tags = _serialize_tags(body.tags)
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     return {"message": "Tags updated", "tags": body.tags}
 
@@ -421,7 +421,7 @@ def instance_action(iid: str, body: InstanceAction,
     else:
         bad_request(f"Action tidak dikenal: {action}")
 
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     audit.info("INSTANCE_%s user=%s instance=%s",
                action.upper(), user.username, iid[:8])
@@ -455,7 +455,7 @@ def expose_instance(iid: str, body: ExposePort,
 
     inst.public_hostname = hostname
     inst.expose_port = body.port
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     sync_nginx_subdomain(db, inst)
 
@@ -485,7 +485,7 @@ def unexpose_instance(iid: str,
     old_hostname = inst.public_hostname
     inst.public_hostname = None
     inst.expose_port = None
-    inst.updated_at = datetime.utcnow()
+    inst.updated_at = datetime.now(timezone.utc)
     db.commit()
     sync_nginx_subdomain(db, inst)
 
@@ -503,6 +503,7 @@ def exec_command(iid: str, body: ExecCommand,
         not_found("Instance atau container belum siap")
     if inst.owner_id != user.id and not user.is_admin:
         forbidden()
+    audit.info("INSTANCE_EXEC user=%s instance=%s cmd=%s", user.username, iid[:8], body.command[:200])
     return get_engine().exec_command(inst.container_id, body.command)
 
 
@@ -516,7 +517,7 @@ def create_snapshot(iid: str, body: SnapshotCreate,
     if inst.owner_id != user.id and not user.is_admin:
         forbidden()
 
-    name = body.name or f"snap-{iid[:8]}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    name = body.name or f"snap-{iid[:8]}-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
     existing = db.query(Snapshot).filter(
         Snapshot.owner_id == user.id,
         Snapshot.name == name,
