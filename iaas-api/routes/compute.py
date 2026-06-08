@@ -37,7 +37,6 @@ from helpers import (
     release_public_endpoints_for_instance,
     resolve_image_for_user,
     security_group_allows_port,
-    sync_nginx_ingress,
     sync_nginx_subdomain,
     sync_sshpiper_config,
     _slugify,
@@ -51,7 +50,6 @@ from models import (
     User,
     Volume,
     VolumeAttachment,
-    IngressRule,
 )
 from schemas import ExecCommand, ExposePort, InstanceAction, InstanceCreate, InstanceTagsUpdate, SnapshotCreate
 
@@ -292,7 +290,6 @@ def get_instance(iid: str, user: User = Depends(get_current_user),
     if inst.owner_id != user.id and not user.is_admin:
         forbidden()
     ep = get_attached_public_endpoint(db, inst.id)
-    ingress_rules = db.query(IngressRule).filter(IngressRule.instance_id == iid).all()
     return {
         "id": inst.id, "name": inst.name, "status": inst.status,
         "status_detail": inst.status_detail,
@@ -310,16 +307,6 @@ def get_instance(iid: str, user: User = Depends(get_current_user),
         "ssh_command_direct": f"ssh root@{PUBLIC_HOST} -p {inst.ssh_port}" if inst.ssh_port else None,
         "ssh_password": inst.ssh_password,
         "tags": _parse_tags(inst.tags),
-        "ingress_rules": [
-            {
-                "id": r.id,
-                "path": r.path,
-                "target_port": r.target_port,
-                "description": r.description,
-                "public_url": f"{PUBLIC_BASE_URL}{r.path}",
-            }
-            for r in ingress_rules
-        ],
         "created_at": str(inst.created_at),
     }
 
@@ -391,7 +378,6 @@ def instance_action(iid: str, body: InstanceAction,
             inst.ip_address = ip
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running"
-        sync_nginx_ingress(db)
         sync_sshpiper_config(db)
     elif action == "stop":
         eng.stop_instance(inst.container_id)
@@ -404,7 +390,6 @@ def instance_action(iid: str, body: InstanceAction,
             inst.ip_address = ip
         inst.status = InstanceStatus.RUNNING
         inst.status_detail = "Running (rebooted)"
-        sync_nginx_ingress(db)
         sync_nginx_subdomain(db, inst)
         sync_sshpiper_config(db)
     elif action == "terminate":

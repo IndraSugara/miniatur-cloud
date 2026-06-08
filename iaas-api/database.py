@@ -39,9 +39,6 @@ def ensure_schema():
             _ensure_column(conn, insp, "instances", "tags", "TEXT")
             _ensure_column(conn, insp, "instances", "public_hostname", "VARCHAR(256)")
             _ensure_column(conn, insp, "instances", "expose_port", "INTEGER")
-        # IngressRule extensions
-        if insp.has_table("ingress_rules"):
-            _ensure_column(conn, insp, "ingress_rules", "description", "VARCHAR(256)")
         # DatabaseInstance table — auto-created by create_all above
 
 

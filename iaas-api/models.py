@@ -128,15 +128,6 @@ class VolumeAttachment(Base):
     mount_path  = Column(String(128), nullable=False)
     created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
-class IngressRule(Base):
-    __tablename__ = "ingress_rules"
-    id          = Column(String(36), primary_key=True)
-    owner_id    = Column(String(36), ForeignKey("users.id"), nullable=False)
-    instance_id = Column(String(36), ForeignKey("instances.id"), nullable=False)
-    path        = Column(String(256), nullable=False, unique=True)
-    target_port = Column(Integer, nullable=False)
-    description = Column(String(256), nullable=True)
-    created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class DatabaseStatus(str, enum.Enum):
     CREATING  = "creating"

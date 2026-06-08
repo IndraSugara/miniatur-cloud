@@ -31,7 +31,7 @@ from models import (
     PublicEndpoint,
     Instance,
     InstanceStatus,
-    IngressRule,
+
     Network,
     ObjectBucket,
     SecurityGroup,
@@ -476,39 +476,7 @@ def _reload_nginx():
         _hlog.error(f"Nginx reload error: {e}")
 
 
-# ── Legacy: path-based ingress rules (kept for backward-compat) ────────────
-def sync_nginx_ingress(db: Session):
-    """Rewrite /app/ingress/routes.conf for path-based ingress rules and reload Nginx."""
-    import os
-    rules = db.query(IngressRule).all()
 
-    config_lines = []
-    for rule in rules:
-        inst = db.query(Instance).filter(Instance.id == rule.instance_id).first()
-        if inst and inst.ip_address and inst.status == InstanceStatus.RUNNING:
-            if inst.network_id:
-                net = db.query(Network).filter(Network.id == inst.network_id).first()
-                if net:
-                    ensure_gateway_connected_to_network(net.docker_name)
-            config_lines.append(f"location {rule.path} {{")
-            config_lines.append(f"    proxy_pass http://{inst.ip_address}:{rule.target_port}/;")
-            config_lines.append(f"    proxy_set_header Host $host;")
-            config_lines.append(f"    proxy_set_header X-Real-IP $remote_addr;")
-            config_lines.append(f"    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;")
-            config_lines.append(f"    proxy_set_header X-Forwarded-Proto $scheme;")
-            config_lines.append(f"    proxy_http_version 1.1;")
-            config_lines.append(f"    proxy_set_header Upgrade $http_upgrade;")
-            config_lines.append(f"    proxy_set_header Connection 'upgrade';")
-            config_lines.append(f"    proxy_read_timeout 300s;")
-            config_lines.append("}")
-
-    ingress_dir = "/app/ingress"
-    os.makedirs(ingress_dir, exist_ok=True)
-    conf_path = os.path.join(ingress_dir, "routes.conf")
-    with open(conf_path, "w") as f:
-        f.write("\n".join(config_lines))
-
-    _reload_nginx()
 
 
 # ── SSH Proxy (sshpiper) Sync ──────────────────────────────────
