@@ -111,3 +111,13 @@ class IngressRuleCreate(BaseModel):
 class ExposePort(BaseModel):
     port        : int = Field(..., ge=1, le=65535, description="Port yang dijalankan app di dalam instance")
     description : Optional[str] = None
+
+
+class DatabaseCreate(BaseModel):
+    name       : str = Field(..., min_length=2, max_length=64)
+    engine     : str = Field(default="postgresql-16")
+    network_id : Optional[str] = None
+
+
+class DatabaseAction(BaseModel):
+    action: str  # start | stop | reboot

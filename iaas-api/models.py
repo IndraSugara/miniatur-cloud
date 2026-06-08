@@ -137,3 +137,32 @@ class IngressRule(Base):
     target_port = Column(Integer, nullable=False)
     description = Column(String(256), nullable=True)
     created_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+class DatabaseStatus(str, enum.Enum):
+    CREATING  = "creating"
+    AVAILABLE = "available"
+    STOPPED   = "stopped"
+    DELETING  = "deleting"
+    ERROR     = "error"
+
+class DatabaseInstance(Base):
+    __tablename__ = "database_instances"
+    id              = Column(String(36), primary_key=True)
+    name            = Column(String(128), nullable=False)
+    owner_id        = Column(String(36), ForeignKey("users.id"), nullable=False)
+    owner_username  = Column(String(64), nullable=False)
+    engine          = Column(String(32), default="postgresql-16")
+    status          = Column(Enum(DatabaseStatus), default=DatabaseStatus.CREATING)
+    db_name         = Column(String(64), nullable=False, unique=True)
+    db_user         = Column(String(64), nullable=False)
+    db_password     = Column(String(64), nullable=False)
+    container_id    = Column(String(64), nullable=True)
+    network_id      = Column(String(36), ForeignKey("networks.id"), nullable=True)
+    ip_address      = Column(String(15), nullable=True)
+    port            = Column(Integer, default=5432)
+    volume_name     = Column(String(128), nullable=True)
+    public_hostname = Column(String(256), nullable=True)
+    expose_port     = Column(Integer, nullable=True)
+    error_message   = Column(Text, nullable=True)
+    created_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at      = Column(DateTime, default=lambda: datetime.now(timezone.utc))

@@ -15,6 +15,7 @@ from models import User, Network
 
 from routes.auth import router as auth_router
 from routes.compute import router as compute_router
+from routes.database import router as database_router
 from routes.network import router as network_router
 from routes.storage import router as storage_router
 from routes.monitoring import router as monitoring_router
@@ -117,6 +118,7 @@ app.add_middleware(
 # ── Register routers ─────────────────────────────────────────
 app.include_router(auth_router)
 app.include_router(compute_router)
+app.include_router(database_router)
 app.include_router(network_router)
 app.include_router(storage_router)
 app.include_router(monitoring_router)

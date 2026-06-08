@@ -42,6 +42,7 @@ def ensure_schema():
         # IngressRule extensions
         if insp.has_table("ingress_rules"):
             _ensure_column(conn, insp, "ingress_rules", "description", "VARCHAR(256)")
+        # DatabaseInstance table — auto-created by create_all above
 
 
 ensure_schema()

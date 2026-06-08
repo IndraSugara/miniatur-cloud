@@ -251,3 +251,14 @@ export const storageApi = {
       body: payload,
     }),
 };
+
+export const databaseApi = {
+  list:          ()           => request("/databases"),
+  create:        (payload)    => request("/databases", { method: "POST", body: payload }),
+  get:           (id)         => request(`/databases/${id}`),
+  delete:        (id)         => request(`/databases/${id}`, { method: "DELETE" }),
+  action:        (id, action) => request(`/databases/${id}/action`, { method: "POST", body: { action } }),
+  resetPassword: (id)         => request(`/databases/${id}/reset-password`, { method: "POST" }),
+  expose:        (id)         => request(`/databases/${id}/expose`, { method: "POST" }),
+  unexpose:      (id)         => request(`/databases/${id}/expose`, { method: "DELETE" }),
+};

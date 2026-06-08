@@ -1,4 +1,4 @@
-import { adminApi, auth, catalogApi, computeApi, monitorApi, networkApi, storageApi } from "./api.js";
+import { adminApi, auth, catalogApi, computeApi, databaseApi, monitorApi, networkApi, storageApi } from "./api.js";
 import state from "./state.js";
 import { toast } from "./ui.js";
 import { getView } from "./views/index.js";
@@ -9,6 +9,7 @@ const apis = {
   monitor: monitorApi,
   catalog: catalogApi,
   compute: computeApi,
+  database: databaseApi,
   network: networkApi,
   storage: storageApi,
 };

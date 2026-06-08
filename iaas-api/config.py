@@ -42,3 +42,7 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 # ── SSH Proxy (sshpiper) ─────────────────────────────────
 SSH_PROXY_DOMAIN    = os.getenv("SSH_PROXY_DOMAIN", "ssh.sughara.my.id")
 SSH_PROXY_PORT      = int(os.getenv("SSH_PROXY_PORT", "22"))
+
+# ── RDS (Managed Database) ───────────────────────────────
+RDS_PORT_START = int(os.getenv("RDS_PORT_START", "5500"))
+RDS_PORT_END   = int(os.getenv("RDS_PORT_END",   "5520"))
