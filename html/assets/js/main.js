@@ -18,8 +18,12 @@ const elements = {
   loginScreen: document.getElementById("login-screen"),
   appShell: document.getElementById("app-shell"),
   loginForm: document.getElementById("login-form"),
+  loginModeText: document.getElementById("login-mode-text"),
   loginError: document.getElementById("login-error"),
   loginSubmit: document.getElementById("login-submit"),
+  loginEmail: document.getElementById("login-email"),
+  registerFields: document.getElementById("register-fields"),
+  toggleRegister: document.getElementById("toggle-register"),
   userChip: document.getElementById("user-chip"),
   logoutBtn: document.getElementById("logout-btn"),
   refreshViewBtn: document.getElementById("refresh-view"),
@@ -32,6 +36,8 @@ const elements = {
   docsBtn: document.getElementById("open-docs"),
   workspaceSelect: document.getElementById("workspace-select"),
 };
+
+let isRegisterMode = false;
 
 /** Refresh the workspace dropdown from state.networks. */
 function refreshWorkspaceDropdown() {
@@ -112,17 +118,24 @@ async function mountView(viewId) {
 async function bootstrapApp() {
   const me = await apis.auth.me();
   state.user = me;
-  elements.userChip.textContent = `${me.username}${me.is_admin ? " (admin)" : ""}`;
 
-  const adminNav = elements.navItems.find((item) => item.dataset.view === "admin");
-  if (adminNav) {
-    adminNav.classList.toggle("hidden", !me.is_admin);
+  // Show quota in user chip
+  const quota = me.quota_instances || 0;
+  elements.userChip.innerHTML = `${me.username}${me.is_admin ? " (admin)" : ""} <span class="dim" style="font-size:11px;" title="Instance quota">[quota: ${quota}]</span>`;
+
+  // Admin-only nav/buttons
+  const accountNav = elements.navItems.find((item) => item.dataset.view === "admin");
+  if (accountNav) {
+    // Always visible — shows Account for all users, Admin panel for admins
+    accountNav.textContent = me.is_admin ? "Admin" : "Account";
   }
   const monitoringNav = elements.navItems.find((item) => item.dataset.view === "monitoring");
   if (monitoringNav) {
     monitoringNav.classList.toggle("hidden", !me.is_admin);
   }
   elements.monitorBtn.classList.toggle("hidden", !me.is_admin);
+  // MinIO console only for admins (regular users use presigned URLs via Storage view)
+  elements.storageBtn.classList.toggle("hidden", !me.is_admin);
 
   // Load networks for workspace dropdown
   try {
@@ -150,6 +163,25 @@ function logout() {
   setLoggedOutUI();
 }
 
+elements.toggleRegister.addEventListener("click", (event) => {
+  event.preventDefault();
+  isRegisterMode = !isRegisterMode;
+  if (isRegisterMode) {
+    elements.loginModeText.textContent = "Daftar akun baru untuk mengelola resource cloud.";
+    elements.loginSubmit.textContent = "Daftar";
+    elements.toggleRegister.textContent = "Sudah punya akun? Masuk";
+    elements.registerFields.classList.remove("hidden");
+    elements.loginEmail.required = true;
+  } else {
+    elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, dan storage.";
+    elements.loginSubmit.textContent = "Masuk";
+    elements.toggleRegister.textContent = "Belum punya akun? Daftar";
+    elements.registerFields.classList.add("hidden");
+    elements.loginEmail.required = false;
+  }
+  elements.loginError.className = "message error hidden";
+});
+
 elements.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(elements.loginForm);
@@ -160,15 +192,34 @@ elements.loginForm.addEventListener("submit", async (event) => {
     return;
   }
   elements.loginSubmit.disabled = true;
-  elements.loginSubmit.textContent = "Masuk...";
+  elements.loginSubmit.textContent = isRegisterMode ? "Mendaftar..." : "Masuk...";
   try {
-    await apis.auth.login(username, password);
-    await bootstrapApp();
+    if (isRegisterMode) {
+      const email = String(form.get("email") || "").trim();
+      if (!email) {
+        showLoginError("Email wajib diisi untuk pendaftaran.");
+        elements.loginSubmit.disabled = false;
+        elements.loginSubmit.textContent = "Daftar";
+        return;
+      }
+      await apis.auth.register({ username, email, password });
+      // Auto-login after registration
+      await apis.auth.login(username, password);
+      isRegisterMode = false;
+      elements.registerFields.classList.add("hidden");
+      elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, dan storage.";
+      elements.loginSubmit.textContent = "Masuk";
+      elements.toggleRegister.textContent = "Belum punya akun? Daftar";
+      await bootstrapApp();
+    } else {
+      await apis.auth.login(username, password);
+      await bootstrapApp();
+    }
   } catch (error) {
     showLoginError(error instanceof Error ? error.message : String(error));
   } finally {
     elements.loginSubmit.disabled = false;
-    elements.loginSubmit.textContent = "Masuk";
+    elements.loginSubmit.textContent = isRegisterMode ? "Daftar" : "Masuk";
   }
 });
 

@@ -147,7 +147,13 @@ export const auth = {
     return request("/auth/me");
   },
   register(payload) {
-    return request("/auth/register", { method: "POST", body: payload });
+    return request("/auth/register", { method: "POST", body: payload, auth: false });
+  },
+  changePassword(currentPassword, newPassword) {
+    return request("/auth/change-password", {
+      method: "POST",
+      body: { current_password: currentPassword, new_password: newPassword },
+    });
   },
 };
 

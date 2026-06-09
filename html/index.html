@@ -16,7 +16,7 @@
     <div id="login-screen" class="login-screen">
       <div class="login-card">
         <h1 class="login-title">Miniatur Cloud</h1>
-        <p class="login-subtitle">Masuk untuk mengelola compute, network, dan storage.</p>
+        <p id="login-mode-text" class="login-subtitle">Masuk untuk mengelola compute, network, dan storage.</p>
         <form id="login-form" class="stack-md">
           <label class="field-label" for="login-username">Username</label>
           <input id="login-username" name="username" type="text" autocomplete="username" required />
@@ -30,9 +30,17 @@
             required
           />
 
+          <div id="register-fields" class="hidden">
+            <label class="field-label" for="login-email">Email</label>
+            <input id="login-email" name="email" type="email" autocomplete="email" />
+          </div>
+
           <button id="login-submit" type="submit" class="btn btn-primary btn-block">Masuk</button>
         </form>
         <p id="login-error" class="message error hidden"></p>
+        <p style="text-align:center;margin-top:12px;font-size:13px;">
+          <a id="toggle-register" href="#" style="color:var(--primary);">Belum punya akun? Daftar</a>
+        </p>
       </div>
     </div>
 

@@ -91,6 +91,29 @@ def me(user: User = Depends(get_current_user)):
             "quota_instances": user.quota_instances}
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/auth/change-password")
+def change_password(
+    body: ChangePasswordRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Allow any authenticated user to change their own password."""
+    if not verify_password(body.current_password, user.hashed_password):
+        invalid_credentials()
+    if len(body.new_password) < 8:
+        from errors import bad_request
+        bad_request("Password baru harus minimal 8 karakter")
+    user.hashed_password = hash_password(body.new_password)
+    db.commit()
+    audit.info("PASSWORD_CHANGE user=%s", user.username)
+    return {"message": "Password berhasil diubah"}
+
+
 @router.get("/admin/users", tags=["Admin"])
 def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     users = db.query(User).order_by(User.created_at.desc()).all()

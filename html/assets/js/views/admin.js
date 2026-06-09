@@ -1,35 +1,46 @@
 import { escapeHtml, toLocalDate } from "../utils.js";
-import { toast } from "../ui.js";
+import { showModal, toast } from "../ui.js";
 
 function message(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
-function renderCurrentUser(user) {
-  const username = escapeHtml(user?.username || "-");
-  const email = escapeHtml(user?.email || "-");
-  const quota = escapeHtml(user?.quota_instances ?? "-");
-  const userId = escapeHtml(user?.id || "-");
-  const role = user?.is_admin
-    ? '<span class="badge-admin">admin</span>'
-    : "user";
-  return `
-    <div>Username: <strong>${username}</strong></div>
-    <div>Email: <strong>${email}</strong></div>
-    <div>Role: ${role}</div>
-    <div>Quota Instances: <strong>${quota}</strong></div>
-    <div>User ID: <span class="mono">${userId}</span></div>
-  `;
-}
-
 export const adminView = {
   id: "admin",
-  title: "Admin",
-  subtitle: "Kelola pengguna dan verifikasi role admin.",
-  async mount(root, { apis }) {
+  title: "Account",
+  subtitle: "Kelola profil, password, dan administrasi pengguna.",
+  async mount(root, { apis, state }) {
+    const isAdmin = state.user?.is_admin || false;
+
     root.innerHTML = `
+      <section class="panel" id="profile-panel">
+        <h3>Profil Saya</h3>
+        <div id="profile-content"><span class="dim"><span class="spinner"></span> Memuat...</span></div>
+      </section>
+
+      <section class="panel" id="password-panel">
+        <h3>Ubah Password</h3>
+        <form id="change-password-form" class="stack-md" style="max-width:420px;">
+          <div>
+            <label class="field-label" for="cp-current">Password Saat Ini</label>
+            <input id="cp-current" type="password" required autocomplete="current-password" />
+          </div>
+          <div>
+            <label class="field-label" for="cp-new">Password Baru</label>
+            <input id="cp-new" type="password" required minlength="8" autocomplete="new-password" />
+          </div>
+          <div>
+            <label class="field-label" for="cp-confirm">Konfirmasi Password Baru</label>
+            <input id="cp-confirm" type="password" required minlength="8" autocomplete="new-password" />
+          </div>
+          <button class="btn btn-primary" type="submit">Ubah Password</button>
+        </form>
+        <p id="cp-message" class="message hidden"></p>
+      </section>
+
+      ${isAdmin ? `
       <section class="panel">
-        <h3>Register User</h3>
+        <h3>Register User Baru</h3>
         <form id="register-user-form" class="grid grid-3">
           <div>
             <label class="field-label" for="reg-username">Username</label>
@@ -50,12 +61,7 @@ export const adminView = {
       </section>
 
       <section class="panel">
-        <h3>Current User</h3>
-        <div id="me-box" class="dim"><span class="spinner"></span> Memuat...</div>
-      </section>
-
-      <section class="panel">
-        <h3>User List (Admin Only)</h3>
+        <h3>User List</h3>
         <div class="table-wrap">
           <table>
             <thead>
@@ -74,50 +80,108 @@ export const adminView = {
           </table>
         </div>
       </section>
+      ` : ""}
     `;
 
-    const meBox = root.querySelector("#me-box");
-    const usersBody = root.querySelector("#users-body");
-
-    async function load() {
+    // ── Load profile ──
+    const profileContent = root.querySelector("#profile-content");
+    async function loadProfile() {
       try {
         const me = await apis.auth.me();
-        meBox.className = "grid";
-        meBox.innerHTML = renderCurrentUser(me);
+        state.user = me; // Refresh state
+        const quota = me.quota_instances || 0;
+        profileContent.innerHTML = `
+          <div class="grid grid-2">
+            <div>
+              <div class="dim" style="font-size:12px;">Username</div>
+              <div><strong>${escapeHtml(me.username)}</strong> ${me.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : ""}</div>
+            </div>
+            <div>
+              <div class="dim" style="font-size:12px;">Email</div>
+              <div>${escapeHtml(me.email)}</div>
+            </div>
+            <div>
+              <div class="dim" style="font-size:12px;">Instance Quota</div>
+              <div><strong>${quota}</strong> instance</div>
+            </div>
+            <div>
+              <div class="dim" style="font-size:12px;">User ID</div>
+              <div class="mono" style="font-size:12px;">${escapeHtml(me.id)}</div>
+            </div>
+          </div>
+          ${!me.is_admin && quota <= 3 ? `<p class="dim" style="margin-top:8px;font-size:12px;">Butuh quota lebih? Hubungi administrator.</p>` : ""}
+        `;
       } catch (error) {
-        meBox.className = "message error";
-        meBox.textContent = message(error);
-      }
-
-      try {
-        const usersPayload = await apis.admin.listUsers();
-        const users = usersPayload.users || [];
-        if (users.length === 0) {
-          usersBody.innerHTML = `<tr><td colspan="6" class="dim">Tidak ada user.</td></tr>`;
-          return;
-        }
-        usersBody.innerHTML = users
-          .map(
-            (item) => `
-              <tr>
-                <td>${escapeHtml(item.username)}</td>
-                <td>${escapeHtml(item.email)}</td>
-                <td>${item.is_admin ? '<span class="badge-admin">admin</span>' : "user"}</td>
-                <td>${item.is_active ? "active" : "inactive"}</td>
-                <td>${item.quota_instances}</td>
-                <td>${toLocalDate(item.created_at)}</td>
-              </tr>
-            `,
-          )
-          .join("");
-      } catch (error) {
-        usersBody.innerHTML = `<tr><td colspan="6" class="dim">${message(error)}</td></tr>`;
+        profileContent.innerHTML = `<p class="message error">${message(error)}</p>`;
       }
     }
 
-    root
-      .querySelector("#register-user-form")
-      .addEventListener("submit", async (event) => {
+    // ── Change password ──
+    const cpForm = root.querySelector("#change-password-form");
+    const cpMsg = root.querySelector("#cp-message");
+
+    cpForm.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const current = root.querySelector("#cp-current").value;
+      const newPw = root.querySelector("#cp-new").value;
+      const confirm = root.querySelector("#cp-confirm").value;
+
+      if (newPw !== confirm) {
+        cpMsg.className = "message error";
+        cpMsg.textContent = "Password baru dan konfirmasi tidak cocok.";
+        return;
+      }
+      if (newPw.length < 8) {
+        cpMsg.className = "message error";
+        cpMsg.textContent = "Password baru harus minimal 8 karakter.";
+        return;
+      }
+
+      cpMsg.className = "message hidden";
+      try {
+        await apis.auth.changePassword(current, newPw);
+        cpMsg.className = "message ok";
+        cpMsg.textContent = "Password berhasil diubah.";
+        cpForm.reset();
+      } catch (error) {
+        cpMsg.className = "message error";
+        cpMsg.textContent = message(error);
+      }
+    });
+
+    // ── Admin-only sections ──
+    if (isAdmin) {
+      // Load user list
+      const usersBody = root.querySelector("#users-body");
+      async function loadUsers() {
+        try {
+          const usersPayload = await apis.admin.listUsers();
+          const users = usersPayload.users || [];
+          if (users.length === 0) {
+            usersBody.innerHTML = `<tr><td colspan="6" class="dim">Tidak ada user.</td></tr>`;
+            return;
+          }
+          usersBody.innerHTML = users
+            .map(
+              (item) => `
+                <tr>
+                  <td>${escapeHtml(item.username)}</td>
+                  <td>${escapeHtml(item.email)}</td>
+                  <td>${item.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : "user"}</td>
+                  <td>${item.is_active ? "active" : "inactive"}</td>
+                  <td>${item.quota_instances}</td>
+                  <td>${toLocalDate(item.created_at)}</td>
+                </tr>
+              `,
+            )
+            .join("");
+        } catch (error) {
+          usersBody.innerHTML = `<tr><td colspan="6" class="dim">${message(error)}</td></tr>`;
+        }
+      }
+
+      // Register form
+      root.querySelector("#register-user-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const payload = {
           username: root.querySelector("#reg-username").value.trim(),
@@ -128,13 +192,16 @@ export const adminView = {
           await apis.auth.register(payload);
           toast("User berhasil didaftarkan.");
           event.target.reset();
-          await load();
+          await loadUsers();
         } catch (error) {
           toast(message(error), "error");
         }
       });
 
-    await load();
+      await loadUsers();
+    }
+
+    await loadProfile();
     return () => {};
   },
 };
