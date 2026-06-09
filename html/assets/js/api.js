@@ -229,7 +229,8 @@ export const storageApi = {
   detachVolume: (id, payload) =>
     request(`/volumes/${id}/detach`, { method: "POST", body: payload }),
   listBuckets: () => request("/storage/buckets"),
-  createBucket: (name) => request("/storage/buckets", { method: "POST", body: { name } }),
+  createBucket: (name, networkId = null) =>
+    request("/storage/buckets", { method: "POST", body: { name, network_id: networkId } }),
   deleteBucket: (name, force = false) =>
     request(`/storage/buckets/${encodeURIComponent(name)}?force=${force ? "true" : "false"}`, {
       method: "DELETE",

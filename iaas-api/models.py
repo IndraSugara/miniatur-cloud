@@ -93,6 +93,7 @@ class ObjectBucket(Base):
     id         = Column(String(36), primary_key=True)
     name       = Column(String(63), unique=True, nullable=False)
     owner_id   = Column(String(36), ForeignKey("users.id"), nullable=False)
+    network_id = Column(String(36), ForeignKey("networks.id"), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class PublicEndpoint(Base):

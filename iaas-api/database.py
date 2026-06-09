@@ -39,6 +39,9 @@ def ensure_schema():
             _ensure_column(conn, insp, "instances", "tags", "TEXT")
             _ensure_column(conn, insp, "instances", "public_hostname", "VARCHAR(256)")
             _ensure_column(conn, insp, "instances", "expose_port", "INTEGER")
+        # ObjectBucket table — auto-created by create_all above
+        if insp.has_table("object_buckets"):
+            _ensure_column(conn, insp, "object_buckets", "network_id", "VARCHAR(36)")
         # DatabaseInstance table — auto-created by create_all above
 
 

@@ -95,6 +95,7 @@ class PublicEndpointAttach(BaseModel):
 
 class BucketCreate(BaseModel):
     name: Optional[str] = Field(None, min_length=3, max_length=63)
+    network_id: Optional[str] = None
 
 
 class PresignRequest(BaseModel):

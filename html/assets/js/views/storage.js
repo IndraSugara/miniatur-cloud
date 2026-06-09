@@ -71,13 +71,14 @@ export const storageView = {
             <thead>
               <tr>
                 <th>Name</th>
+                <th>Network</th>
                 <th>Owner</th>
                 <th>Created</th>
                 <th>Action</th>
               </tr>
             </thead>
             <tbody id="bucket-body">
-              <tr><td colspan="4" class="dim"><span class="spinner"></span> Memuat...</td></tr>
+              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>
@@ -157,17 +158,29 @@ export const storageView = {
         .join("");
     }
 
+    function resolveNetworkName(networkId) {
+      if (!networkId) return '<span class="dim">—</span>';
+      // Look up from state networks or cached network list
+      const net = (state.networks || []).find((n) => n.id === networkId);
+      return net ? escapeHtml(net.name) : '<span class="dim">' + escapeHtml(networkId.slice(0, 8) + '…') + '</span>';
+    }
+
     function renderBuckets() {
-      if (buckets.length === 0) {
-        bucketBody.innerHTML = `<tr><td colspan="4" class="dim">Belum ada bucket.</td></tr>`;
+      let filtered = buckets;
+      if (activeWs) {
+        filtered = buckets.filter((b) => b.network_id === activeWs);
+      }
+      if (filtered.length === 0) {
+        bucketBody.innerHTML = `<tr><td colspan="5" class="dim">Belum ada bucket${activeWs ? " di workspace ini" : ""}.</td></tr>`;
         return;
       }
-      bucketBody.innerHTML = buckets
+      bucketBody.innerHTML = filtered
         .map(
           (item) => `
             <tr>
               <td class="mono">${escapeHtml(item.name)}</td>
-              <td class="mono">${escapeHtml(item.owner_id)}</td>
+              <td>${resolveNetworkName(item.network_id)}</td>
+              <td class="mono" style="font-size:11px;">${escapeHtml(item.owner_id ? item.owner_id.slice(0,8)+'…' : '-')}</td>
               <td>${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
@@ -330,8 +343,9 @@ export const storageView = {
       event.preventDefault();
       const name = root.querySelector("#bucket-name").value.trim();
       try {
-        await apis.storage.createBucket(name || null);
-        toast("Bucket dibuat.");
+        const netId = activeWs || null;
+        await apis.storage.createBucket(name || null, netId);
+        toast(netId ? "Bucket dibuat dalam workspace." : "Bucket dibuat.");
         event.target.reset();
         await loadAll();
       } catch (error) { toast(em(error), "error"); }

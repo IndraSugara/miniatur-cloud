@@ -219,6 +219,7 @@ def list_buckets(user: User = Depends(get_current_user), db: Session = Depends(g
             {
                 "name": b.name,
                 "owner_id": b.owner_id,
+                "network_id": b.network_id,
                 "created_at": str(b.created_at),
             }
             for b in buckets
@@ -245,6 +246,17 @@ def create_bucket(body: BucketCreate, user: User = Depends(get_current_user),
     if exists:
         already_exists("Bucket")
 
+    # Validate network_id if provided
+    network_id = None
+    if body.network_id:
+        net = db.query(Network).filter(Network.id == body.network_id).first()
+        if not net:
+            from errors import not_found as _nf
+            _nf("Network")
+        if not user.is_admin and net.owner_id != user.id and not net.is_default:
+            forbidden()
+        network_id = net.id
+
     s3 = get_s3_client()
     try:
         if s3.bucket_exists(bucket_name):
@@ -259,10 +271,11 @@ def create_bucket(body: BucketCreate, user: User = Depends(get_current_user),
         id=str(uuid.uuid4()),
         name=bucket_name,
         owner_id=user.id,
+        network_id=network_id,
     )
     db.add(bucket)
     db.commit()
-    return {"name": bucket.name}
+    return {"name": bucket.name, "network_id": network_id}
 
 
 @router.delete("/storage/buckets/{bucket}", tags=["ObjectStorage"])
