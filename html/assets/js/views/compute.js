@@ -17,7 +17,8 @@ export const computeView = {
   id: "compute",
   title: "Compute",
   subtitle: "Kelola instance, tindakan lifecycle, SSH, exec, logs, dan snapshot.",
-  async mount(root, { apis }) {
+  async mount(root, { apis, navigate, state }) {
+    const activeWs = state.activeWorkspace;
     root.innerHTML = `
       <section class="panel">
         <h3>Create Instance</h3>
@@ -77,6 +78,7 @@ export const computeView = {
                 <th>Status</th>
                 <th>Image</th>
                 <th>Type</th>
+                <th>Network</th>
                 <th>Public URL</th>
                 <th>SSH/Endpoint</th>
                 <th>Created</th>
@@ -84,7 +86,7 @@ export const computeView = {
               </tr>
             </thead>
             <tbody id="instance-body">
-              <tr><td colspan="8" class="dim"><span class="spinner"></span> Memuat instance…</td></tr>
+              <tr><td colspan="9" class="dim"><span class="spinner"></span> Memuat instance…</td></tr>
             </tbody>
           </table>
         </div>
@@ -199,6 +201,12 @@ export const computeView = {
       return net ? net.name : networkId.slice(0, 8) + "…";
     }
 
+    function renderNetworkLink(networkId) {
+      if (!networkId) return '<span class="dim">-</span>';
+      const name = resolveNetworkName(networkId);
+      return `<span class="resource-link" data-nav-to="network" data-hl-net="${escapeHtml(networkId)}" title="Lihat network">${escapeHtml(name)}</span>`;
+    }
+
     function renderStatusBadge(item) {
       let badge = `<span class="status ${statusClass(item.status)}">${item.status}</span>`;
       if (item.status_detail && item.status !== "running" && item.status !== "terminated") {
@@ -211,11 +219,15 @@ export const computeView = {
     }
 
     function renderInstances() {
-      if (instances.length === 0) {
-        instanceBody.innerHTML = `<tr><td colspan="8" class="dim">Belum ada instance.</td></tr>`;
+      let filtered = instances;
+      if (activeWs) {
+        filtered = instances.filter((i) => i.network_id === activeWs);
+      }
+      if (filtered.length === 0) {
+        instanceBody.innerHTML = `<tr><td colspan="9" class="dim">Belum ada instance${activeWs ? " di workspace ini" : ""}.</td></tr>`;
         return;
       }
-      instanceBody.innerHTML = instances
+      instanceBody.innerHTML = filtered
         .map(
           (item) => `
             <tr>
@@ -223,6 +235,7 @@ export const computeView = {
               <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
+              <td>${renderNetworkLink(item.network_id)}</td>
               <td>${item.public_url
                 ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono" style="color:var(--primary);font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
                 : '<span class="dim">—</span>'
@@ -811,6 +824,19 @@ export const computeView = {
       } catch (error) {
         toast(extractMessage(error), "error");
       }
+    });
+
+    // Cross-navigation: clicking a network link navigates to Network view
+    instanceBody.addEventListener("click", (event) => {
+      const link = event.target.closest("[data-nav-to]");
+      if (!link) return;
+      const targetView = link.dataset.navTo;
+      if (link.dataset.hlNet) {
+        state.activeWorkspace = link.dataset.hlNet;
+        const sel = document.getElementById("workspace-select");
+        if (sel) sel.value = link.dataset.hlNet;
+      }
+      navigate(targetView);
     });
 
     await loadCreateDependencies();

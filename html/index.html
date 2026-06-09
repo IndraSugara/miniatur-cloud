@@ -47,9 +47,15 @@
         </div>
 
         <div class="topbar-actions">
+          <div class="workspace-selector">
+            <label class="field-label" for="workspace-select" style="margin:0;white-space:nowrap;">Workspace</label>
+            <select id="workspace-select">
+              <option value="">All Resources</option>
+            </select>
+          </div>
           <button id="open-docs" class="btn btn-ghost">API Docs</button>
           <button id="open-monitor" class="btn btn-ghost">Grafana</button>
-          <button id="open-storage" class="btn btn-ghost">MinIO</button>
+          <button id="open-storage-console" class="btn btn-ghost">MinIO</button>
           <div id="user-chip" class="user-chip">-</div>
           <button id="logout-btn" class="btn btn-danger">Logout</button>
         </div>

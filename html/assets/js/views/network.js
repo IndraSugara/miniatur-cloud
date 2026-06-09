@@ -10,7 +10,8 @@ export const networkView = {
   id: "network",
   title: "Network",
   subtitle: "Kelola network, security group, dan public endpoint.",
-  async mount(root, { apis }) {
+  async mount(root, { apis, navigate, state }) {
+    const activeWs = state.activeWorkspace;
     root.innerHTML = `
       <section class="panel">
         <h3>Create Network</h3>
@@ -38,7 +39,7 @@ export const networkView = {
         <div class="table-wrap">
           <table>
             <thead>
-              <tr><th>Name</th><th>CIDR</th><th>Gateway</th><th>Default</th><th>Action</th></tr>
+              <tr><th>Name</th><th>CIDR</th><th>Gateway</th><th>Default</th><th>Workspace</th><th>Action</th></tr>
             </thead>
             <tbody id="network-body">
               <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat...</td></tr>
@@ -92,17 +93,20 @@ export const networkView = {
 
     function renderNetworks() {
       if (networks.length === 0) {
-        networkBody.innerHTML = `<tr><td colspan="5" class="dim">Belum ada network.</td></tr>`;
+        networkBody.innerHTML = `<tr><td colspan="6" class="dim">Belum ada network.</td></tr>`;
         return;
       }
       networkBody.innerHTML = networks
         .map(
           (n) => `
-            <tr>
-              <td>${escapeHtml(n.name)}</td>
+            <tr${activeWs === n.id ? ' style="background:rgba(56,189,248,0.06);"' : ""}>
+              <td><strong>${escapeHtml(n.name)}</strong>${activeWs === n.id ? ' <span class="badge badge-blue" style="font-size:10px;">active</span>' : ""}</td>
               <td class="mono">${escapeHtml(n.cidr || "-")}</td>
               <td class="mono">${escapeHtml(n.gateway || "-")}</td>
               <td>${n.is_default ? "Yes" : ""}</td>
+              <td>
+                ${!n.is_default ? `<button class="btn btn-inline" data-ws-select="${n.id}">🔍 Focus</button>` : '<span class="dim">—</span>'}
+              </td>
               <td>${
                 n.is_default
                   ? '<span class="dim">-</span>'
@@ -273,6 +277,16 @@ export const networkView = {
     networkBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+
+      const wsId = target.dataset.wsSelect;
+      if (wsId) {
+        state.activeWorkspace = wsId;
+        const sel = document.getElementById("workspace-select");
+        if (sel) sel.value = wsId;
+        navigate("dashboard");
+        return;
+      }
+
       const id = target.dataset.networkDelete;
       if (!id) return;
       if (!window.confirm("Hapus network ini?")) return;

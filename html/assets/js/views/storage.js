@@ -6,11 +6,26 @@ function em(error) {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Format bytes to human-readable size. */
+function formatSize(bytes) {
+  if (bytes == null || bytes === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  let i = 0;
+  let size = Number(bytes);
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024;
+    i++;
+  }
+  return `${size.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
 export const storageView = {
   id: "storage",
   title: "Storage",
   subtitle: "Kelola block volume dan object storage (bucket/object).",
-  async mount(root, { apis }) {
+  async mount(root, { apis, navigate, state }) {
+    const activeWs = state.activeWorkspace;
+
     root.innerHTML = `
       <section class="panel">
         <h3>Create Volume</h3>
@@ -44,10 +59,10 @@ export const storageView = {
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
-          <h3>Buckets</h3>
+        <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
+          <h3 style="margin:0;">Buckets</h3>
           <form id="bucket-create-form" class="toolbar">
-            <input id="bucket-name" placeholder="my-bucket (optional)" />
+            <input id="bucket-name" placeholder="my-bucket (optional)" style="width:200px;" />
             <button class="btn btn-inline btn-primary" type="submit">Create Bucket</button>
           </form>
         </div>
@@ -68,13 +83,16 @@ export const storageView = {
         </div>
       </section>
 
-      <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
-          <h3 id="object-title">Objects</h3>
-          <form id="object-filter-form" class="toolbar">
-            <input id="object-prefix" placeholder="prefix/" />
-            <button class="btn btn-inline" type="submit">Load Objects</button>
-          </form>
+      <section class="panel" id="objects-panel">
+        <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
+          <h3 id="object-title" style="margin:0;">Objects</h3>
+          <div class="toolbar">
+            <form id="object-filter-form" class="toolbar">
+              <input id="object-prefix" placeholder="prefix/" style="width:150px;" />
+              <button class="btn btn-inline" type="submit">Filter</button>
+            </form>
+            <button id="upload-object-btn" class="btn btn-inline btn-primary" disabled>Upload</button>
+          </div>
         </div>
         <div class="table-wrap">
           <table>
@@ -99,6 +117,7 @@ export const storageView = {
     const objectBody = root.querySelector("#object-body");
     const objectTitle = root.querySelector("#object-title");
     const objectPrefixInput = root.querySelector("#object-prefix");
+    const uploadBtn = root.querySelector("#upload-object-btn");
 
     let volumes = [];
     let buckets = [];
@@ -152,7 +171,7 @@ export const storageView = {
               <td>${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
-                  <button class="btn btn-inline" data-bucket-open="${item.name}">Open</button>
+                  <button class="btn btn-inline" data-bucket-open="${item.name}">Browse</button>
                   <button class="btn btn-inline btn-danger" data-bucket-delete="${item.name}">Delete</button>
                 </div>
               </td>
@@ -166,33 +185,40 @@ export const storageView = {
       if (!activeBucket) {
         objectTitle.textContent = "Objects";
         objectBody.innerHTML = `<tr><td colspan="4" class="dim">Pilih bucket dulu.</td></tr>`;
+        uploadBtn.disabled = true;
         return;
       }
-      objectTitle.textContent = `Objects - ${activeBucket}`;
+      objectTitle.textContent = `Objects — ${activeBucket}`;
+      uploadBtn.disabled = false;
       const prefix = objectPrefixInput.value.trim();
-      const payload = await apis.storage.listObjects(activeBucket, prefix, 200);
-      const objects = payload.objects || [];
-      if (objects.length === 0) {
-        objectBody.innerHTML = `<tr><td colspan="4" class="dim">Object kosong.</td></tr>`;
-        return;
+      try {
+        const payload = await apis.storage.listObjects(activeBucket, prefix, 200);
+        const objects = payload.objects || [];
+        if (objects.length === 0) {
+          objectBody.innerHTML = `<tr><td colspan="4" class="dim">Bucket kosong${prefix ? " (prefix: " + escapeHtml(prefix) + ")" : ""}.</td></tr>`;
+          return;
+        }
+        objectBody.innerHTML = objects
+          .map(
+            (item) => `
+              <tr>
+                <td class="mono" style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.key)}">${escapeHtml(item.key)}</td>
+                <td>${formatSize(item.size)}</td>
+                <td>${item.last_modified ? toLocalDate(item.last_modified) : "-"}</td>
+                <td>
+                  <div class="actions">
+                    <button class="btn btn-inline" data-obj-dl="${item.key}">Download</button>
+                    <button class="btn btn-inline" data-obj-view="${item.key}">View</button>
+                    <button class="btn btn-inline btn-danger" data-obj-del="${item.key}">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            `,
+          )
+          .join("");
+      } catch (error) {
+        objectBody.innerHTML = `<tr><td colspan="4" class="dim">Gagal memuat: ${em(error)}</td></tr>`;
       }
-      objectBody.innerHTML = objects
-        .map(
-          (item) => `
-            <tr>
-              <td class="mono">${escapeHtml(item.key)}</td>
-              <td>${item.size}</td>
-              <td>${item.last_modified ? toLocalDate(item.last_modified) : "-"}</td>
-              <td>
-                <div class="actions">
-                  <button class="btn btn-inline" data-obj-dl="${item.key}">Presign Download</button>
-                  <button class="btn btn-inline btn-danger" data-obj-del="${item.key}">Delete</button>
-                </div>
-              </td>
-            </tr>
-          `,
-        )
-        .join("");
     }
 
     async function loadAll() {
@@ -209,6 +235,7 @@ export const storageView = {
       await loadObjects();
     }
 
+    // ── Volume create ──
     root.querySelector("#volume-create-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const payload = {
@@ -227,6 +254,7 @@ export const storageView = {
       }
     });
 
+    // ── Volume actions ──
     volumeBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -238,16 +266,13 @@ export const storageView = {
           await apis.storage.deleteVolume(deleteId);
           toast("Volume dihapus.");
           await loadAll();
-        } catch (error) {
-          toast(em(error), "error");
-        }
+        } catch (error) { toast(em(error), "error"); }
         return;
       }
 
       const attachId = target.dataset.volAttach;
       if (attachId) {
-        const eligible = instances
-          .filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
+        const eligible = instances.filter((item) => ["running", "stopped"].includes(String(item.status).toLowerCase()));
         if (eligible.length === 0) {
           toast("Tidak ada instance yang bisa dipasang.", "error");
           return;
@@ -258,9 +283,10 @@ export const storageView = {
         const modal = showModal({
           title: "Attach Volume",
           bodyHtml: `
+            <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">Instance akan restart sebentar. Software terinstall tetap tersimpan.</p>
             <div class="grid grid-2">
               <div>
-                <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">Instance akan restart sebentar. Software yang terinstall akan tetap tersimpan.</p><label class="field-label" for="vol-attach-inst">Instance</label>
+                <label class="field-label" for="vol-attach-inst">Instance</label>
                 <select id="vol-attach-inst">${optionsHtml}</select>
               </div>
               <div>
@@ -269,24 +295,20 @@ export const storageView = {
               </div>
             </div>
           `,
-          actions: [
-            {
-              label: "Attach",
-              className: "btn btn-primary",
-              onClick: async ({ close }) => {
-                const instanceId = modal.wrapper.querySelector("#vol-attach-inst").value;
-                const mountPath = modal.wrapper.querySelector("#vol-attach-path").value.trim() || undefined;
-                try {
-                  await apis.storage.attachVolume(attachId, { instance_id: instanceId, mount_path: mountPath });
-                  toast("Volume terpasang. Instance di-restart untuk menerapkan perubahan.");
-                  close();
-                  await loadAll();
-                } catch (error) {
-                  toast(em(error), "error");
-                }
-              },
+          actions: [{
+            label: "Attach",
+            className: "btn btn-primary",
+            onClick: async ({ close }) => {
+              const iid = modal.wrapper.querySelector("#vol-attach-inst").value;
+              const mp = modal.wrapper.querySelector("#vol-attach-path").value.trim() || undefined;
+              try {
+                await apis.storage.attachVolume(attachId, { instance_id: iid, mount_path: mp });
+                toast("Volume terpasang. Instance restart untuk menerapkan perubahan.");
+                close();
+                await loadAll();
+              } catch (error) { toast(em(error), "error"); }
             },
-          ],
+          }],
         });
         return;
       }
@@ -294,20 +316,16 @@ export const storageView = {
       const detach = target.dataset.volDetach;
       if (detach) {
         const [volumeId, instanceId] = detach.split("|");
-        if (!instanceId) {
-          toast("instance_id attachment tidak ditemukan.", "error");
-          return;
-        }
+        if (!instanceId) { toast("instance_id tidak ditemukan.", "error"); return; }
         try {
           await apis.storage.detachVolume(volumeId, { instance_id: instanceId });
-          toast("Volume dilepas. Instance di-restart untuk menerapkan perubahan.");
+          toast("Volume dilepas. Instance restart untuk menerapkan perubahan.");
           await loadAll();
-        } catch (error) {
-          toast(em(error), "error");
-        }
+        } catch (error) { toast(em(error), "error"); }
       }
     });
 
+    // ── Bucket create ──
     root.querySelector("#bucket-create-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const name = root.querySelector("#bucket-name").value.trim();
@@ -316,11 +334,10 @@ export const storageView = {
         toast("Bucket dibuat.");
         event.target.reset();
         await loadAll();
-      } catch (error) {
-        toast(em(error), "error");
-      }
+      } catch (error) { toast(em(error), "error"); }
     });
 
+    // ── Bucket actions ──
     bucketBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -328,6 +345,7 @@ export const storageView = {
       const openName = target.dataset.bucketOpen;
       if (openName) {
         activeBucket = openName;
+        objectPrefixInput.value = "";
         await loadObjects().catch((error) => toast(em(error), "error"));
         return;
       }
@@ -340,17 +358,83 @@ export const storageView = {
           if (activeBucket === deleteName) activeBucket = null;
           toast("Bucket dihapus.");
           await loadAll();
-        } catch (error) {
-          toast(em(error), "error");
-        }
+        } catch (error) { toast(em(error), "error"); }
       }
     });
 
+    // ── Object filter ──
     root.querySelector("#object-filter-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       await loadObjects().catch((error) => toast(em(error), "error"));
     });
 
+    // ── Upload object ──
+    uploadBtn.addEventListener("click", async () => {
+      if (!activeBucket) return;
+      const modal = showModal({
+        title: `Upload to ${activeBucket}`,
+        bodyHtml: `
+          <div class="upload-zone" id="upload-drop-zone">
+            <div class="icon">📁</div>
+            <p>Klik atau drag file ke sini</p>
+            <input type="file" id="upload-file-input" style="display:none;" />
+            <p class="dim" style="font-size:12px;margin-top:8px;">File akan di-upload via presigned URL</p>
+          </div>
+          <div id="upload-status" class="dim" style="margin-top:10px;text-align:center;"></div>
+        `,
+      });
+
+      const dropZone = modal.wrapper.querySelector("#upload-drop-zone");
+      const fileInput = modal.wrapper.querySelector("#upload-file-input");
+      const statusEl = modal.wrapper.querySelector("#upload-status");
+
+      dropZone.addEventListener("click", () => fileInput.click());
+      dropZone.addEventListener("dragover", (e) => { e.preventDefault(); dropZone.classList.add("drag-over"); });
+      dropZone.addEventListener("dragleave", () => dropZone.classList.remove("drag-over"));
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("drag-over");
+        const file = e.dataTransfer.files[0];
+        if (file) uploadFile(file);
+      });
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files[0];
+        if (file) uploadFile(file);
+      });
+
+      async function uploadFile(file) {
+        statusEl.textContent = `Uploading ${file.name} (${formatSize(file.size)})...`;
+        statusEl.className = "";
+        try {
+          // Get presigned URL
+          const presigned = await apis.storage.presignUpload(activeBucket, {
+            object_key: file.name,
+            expiry_seconds: 3600,
+          });
+
+          // Upload via presigned PUT
+          const uploadRes = await fetch(presigned.url, {
+            method: "PUT",
+            body: file,
+            headers: { "Content-Type": file.type || "application/octet-stream" },
+          });
+
+          if (!uploadRes.ok) {
+            throw new Error(`Upload failed: HTTP ${uploadRes.status}`);
+          }
+
+          statusEl.textContent = `✅ ${file.name} berhasil diupload!`;
+          statusEl.className = "message ok";
+          modal.close();
+          await loadObjects();
+        } catch (error) {
+          statusEl.textContent = `❌ ${em(error)}`;
+          statusEl.className = "message error";
+        }
+      }
+    });
+
+    // ── Object actions ──
     objectBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
@@ -363,8 +447,33 @@ export const storageView = {
           await apis.storage.deleteObject(activeBucket, deleteKey);
           toast("Object dihapus.");
           await loadObjects();
+        } catch (error) { toast(em(error), "error"); }
+        return;
+      }
+
+      const viewKey = target.dataset.objView;
+      if (viewKey) {
+        try {
+          const presigned = await apis.storage.presignDownload(activeBucket, {
+            object_key: viewKey,
+            expiry_seconds: 300,
+          });
+          // Try to fetch and preview
+          const res = await fetch(presigned.url);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const contentType = res.headers.get("content-type") || "";
+          const isText = contentType.includes("text") || contentType.includes("json") || contentType.includes("xml") || contentType.includes("javascript");
+          const text = await res.text();
+
+          showModal({
+            title: `Preview: ${viewKey}`,
+            bodyHtml: isText
+              ? `<div class="object-preview">${escapeHtml(text.slice(0, 50000))}${text.length > 50000 ? "\n\n... (truncated)" : ""}</div>`
+              : `<p class="dim">Binary file (${contentType || "unknown type"}) — tidak bisa dipreview.</p>
+                 <a href="${presigned.url}" target="_blank" class="btn btn-inline" style="margin-top:8px;">Download langsung</a>`,
+          });
         } catch (error) {
-          toast(em(error), "error");
+          toast(`Gagal preview: ${em(error)}`, "error");
         }
         return;
       }
@@ -376,18 +485,16 @@ export const storageView = {
             object_key: downloadKey,
             expiry_seconds: 3600,
           });
-          window.prompt("Copy presigned URL:", presigned.url);
-        } catch (error) {
-          toast(em(error), "error");
-        }
+          // Open download in new tab
+          window.open(presigned.url, "_blank", "noopener");
+          toast("Download dimulai di tab baru.");
+        } catch (error) { toast(em(error), "error"); }
       }
     });
 
     await loadAll();
     const timer = window.setInterval(() => {
-      loadAll().catch(() => {
-        // ignore periodic refresh failure
-      });
+      loadAll().catch(() => {});
     }, REFRESH_MS);
     return () => window.clearInterval(timer);
   },

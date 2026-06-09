@@ -1,28 +1,32 @@
 /**
  * Database (RDS) view — managed PostgreSQL databases.
+ * Consistent table-based pattern like Compute/Network/Storage.
  */
 
-import { toast } from "../ui.js";
+import { REFRESH_MS } from "../config.js";
+import { escapeHtml, toLocalDate } from "../utils.js";
+import { showModal, toast } from "../ui.js";
 
-// ── Status badge helper ─────────────────────────────────────
-function statusBadge(status) {
-  const map = {
-    available: "badge-green",
-    creating: "badge-yellow",
-    stopped: "badge-dim",
-    deleting: "badge-yellow",
-    error: "badge-red",
-  };
-  return `<span class="badge ${map[status] || "badge-dim"}">${status}</span>`;
+function errMsg(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
-// ── Copy to clipboard ───────────────────────────────────────
+function statusBadge(status) {
+  const map = {
+    available: '<span class="badge badge-green">available</span>',
+    creating: '<span class="badge badge-yellow">creating</span>',
+    stopped: '<span class="badge badge-dim">stopped</span>',
+    deleting: '<span class="badge badge-yellow">deleting</span>',
+    error: '<span class="badge badge-red">error</span>',
+  };
+  return map[status] || `<span class="badge badge-dim">${status}</span>`;
+}
+
 async function copyText(text, label) {
   try {
     await navigator.clipboard.writeText(text);
     toast(`${label} disalin!`);
   } catch {
-    // Fallback
     const ta = document.createElement("textarea");
     ta.value = text;
     document.body.appendChild(ta);
@@ -38,9 +42,22 @@ export const databaseView = {
   title: "Database (RDS)",
   subtitle: "Kelola managed PostgreSQL databases.",
 
-  async mount(root, { apis, state }) {
+  async mount(root, { apis, navigate, state }) {
+    const activeWs = state.activeWorkspace;
     let databases = [];
     let networks = [];
+
+    function resolveNetworkName(networkId) {
+      if (!networkId) return "-";
+      const net = networks.find((n) => n.id === networkId);
+      return net ? net.name : networkId.slice(0, 8) + "…";
+    }
+
+    function renderNetworkLink(networkId) {
+      if (!networkId) return '<span class="dim">-</span>';
+      const name = resolveNetworkName(networkId);
+      return `<span class="resource-link" data-nav-to="network" data-hl-net="${escapeHtml(networkId)}" title="Lihat network">${escapeHtml(name)}</span>`;
+    }
 
     async function loadData() {
       const [dbRes, netRes] = await Promise.all([
@@ -51,21 +68,21 @@ export const databaseView = {
       networks = netRes.networks || [];
     }
 
-    function networkName(networkId) {
-      const net = networks.find((n) => n.id === networkId);
-      return net ? net.name : "-";
-    }
+    function render() {
+      let filtered = databases;
+      if (activeWs) {
+        filtered = databases.filter((d) => d.network_id === activeWs);
+      }
 
-    function renderList() {
       root.innerHTML = `
         <section class="panel">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-            <h3 style="margin:0;">Databases</h3>
+          <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
+            <h3 style="margin:0;">Databases${activeWs ? " in Workspace" : ""}</h3>
             <button id="rds-create-btn" class="btn btn-primary">+ Create Database</button>
           </div>
 
-          ${databases.length === 0
-            ? `<p class="dim">Belum ada database. Klik "Create Database" untuk memulai.</p>`
+          ${filtered.length === 0
+            ? `<p class="dim">Belum ada database${activeWs ? " di workspace ini" : ""}. Klik "Create Database" untuk memulai.</p>`
             : `<div class="table-wrap"><table>
               <thead>
                 <tr>
@@ -76,24 +93,29 @@ export const databaseView = {
                   <th>Network</th>
                   <th>Public</th>
                   <th>Created</th>
-                  <th></th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                ${databases.map((d) => `
+                ${filtered.map((d) => `
                   <tr>
-                    <td><strong>${d.name}</strong></td>
-                    <td><span class="dim">${d.engine}</span></td>
+                    <td><strong>${escapeHtml(d.name)}</strong></td>
+                    <td><span class="dim">${escapeHtml(d.engine)}</span></td>
                     <td>${statusBadge(d.status)}</td>
-                    <td><code>${d.ip_address || "-"}</code></td>
-                    <td>${networkName(d.network_id)}</td>
+                    <td><code>${escapeHtml(d.ip_address || "-")}</code></td>
+                    <td>${renderNetworkLink(d.network_id)}</td>
                     <td>${d.public_hostname
-                      ? `<span class="badge badge-blue">${d.expose_port}</span>`
+                      ? `<span class="badge badge-blue">port ${d.expose_port}</span>`
                       : `<span class="dim">—</span>`
                     }</td>
-                    <td class="dim">${new Date(d.created_at).toLocaleDateString()}</td>
+                    <td class="dim">${toLocalDate(d.created_at)}</td>
                     <td>
-                      <button class="btn btn-inline rds-detail-btn" data-id="${d.id}">Detail</button>
+                      <div class="actions">
+                        <button class="btn btn-inline rds-detail-btn" data-id="${d.id}">Detail</button>
+                        ${d.status === "available" ? `<button class="btn btn-inline rds-stop-btn" data-id="${d.id}">Stop</button>` : ""}
+                        ${d.status === "stopped" ? `<button class="btn btn-inline rds-start-btn" data-id="${d.id}">Start</button>` : ""}
+                        <button class="btn btn-inline btn-danger rds-delete-btn" data-id="${d.id}" data-name="${escapeHtml(d.name)}">Delete</button>
+                      </div>
                     </td>
                   </tr>
                 `).join("")}
@@ -103,298 +125,242 @@ export const databaseView = {
         </section>
       `;
 
-      // Create button
+      // ── Event bindings ──
       document.getElementById("rds-create-btn")?.addEventListener("click", showCreateModal);
 
-      // Detail buttons
       root.querySelectorAll(".rds-detail-btn").forEach((btn) => {
-        btn.addEventListener("click", () => showDetail(btn.dataset.id));
+        btn.addEventListener("click", () => showDetailModal(btn.dataset.id));
+      });
+      root.querySelectorAll(".rds-stop-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await apis.database.action(btn.dataset.id, "stop");
+            toast("Database stopping...");
+            await loadData();
+            render();
+          } catch (e) { toast(errMsg(e), "error"); }
+        });
+      });
+      root.querySelectorAll(".rds-start-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          try {
+            await apis.database.action(btn.dataset.id, "start");
+            toast("Database starting...");
+            await loadData();
+            render();
+          } catch (e) { toast(errMsg(e), "error"); }
+        });
+      });
+      root.querySelectorAll(".rds-delete-btn").forEach((btn) => {
+        btn.addEventListener("click", async () => {
+          if (!confirm(`Hapus database "${btn.dataset.name}"? Data akan hilang permanen.`)) return;
+          try {
+            await apis.database.delete(btn.dataset.id);
+            toast("Database dihapus.");
+            await loadData();
+            render();
+          } catch (e) { toast(errMsg(e), "error"); }
+        });
+      });
+
+      // Cross-navigation
+      root.querySelectorAll("[data-nav-to]").forEach((link) => {
+        link.addEventListener("click", () => {
+          if (link.dataset.hlNet) {
+            state.activeWorkspace = link.dataset.hlNet;
+            const sel = document.getElementById("workspace-select");
+            if (sel) sel.value = link.dataset.hlNet;
+          }
+          navigate(link.dataset.navTo);
+        });
       });
     }
 
-    // ── Create modal ──────────────────────────────────────────
+    // ── Create modal ──
     function showCreateModal() {
-      const networkOptions = networks.map((n) =>
-        `<option value="${n.id}">${n.name} (${n.cidr || "auto"})</option>`
-      ).join("");
+      const networkOptions = networks
+        .filter((n) => !activeWs || n.id === activeWs)
+        .map((n) => `<option value="${n.id}"${activeWs === n.id ? " selected" : ""}>${escapeHtml(n.name)} (${n.cidr || "auto"})</option>`)
+        .join("");
 
-      const modal = document.createElement("div");
-      modal.className = "modal-backdrop";
-      modal.innerHTML = `
-        <div class="modal-card">
-          <h3>Create Database</h3>
+      const modal = showModal({
+        title: "Create Database",
+        bodyHtml: `
           <div class="stack-md">
-            <label class="field-label">Name</label>
-            <input id="rds-name" type="text" placeholder="my-app-db" required />
-
-            <label class="field-label">Engine</label>
-            <select id="rds-engine">
-              <option value="postgresql-16" selected>PostgreSQL 16</option>
-            </select>
-
-            <label class="field-label">Network</label>
-            <select id="rds-network">${networkOptions}</select>
-
-            <p class="dim" style="font-size:12px;">Database akan ditempatkan di network yang dipilih. Instance di network yang sama bisa mengakses via IP internal.</p>
-
-            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px;">
-              <button id="rds-cancel" class="btn btn-ghost">Batal</button>
-              <button id="rds-submit" class="btn btn-primary">Create</button>
+            <div>
+              <label class="field-label">Name</label>
+              <input id="rds-name" type="text" placeholder="my-app-db" required />
             </div>
+            <div>
+              <label class="field-label">Engine</label>
+              <select id="rds-engine">
+                <option value="postgresql-16" selected>PostgreSQL 16</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label">Network</label>
+              <select id="rds-network">${networkOptions || '<option value="">No networks available</option>'}</select>
+            </div>
+            <p class="dim" style="font-size:12px;">Database akan ditempatkan di network yang dipilih. Instance di network yang sama bisa mengakses via IP internal.</p>
           </div>
-        </div>
-      `;
-      document.getElementById("modal-root").appendChild(modal);
-
-      document.getElementById("rds-cancel").addEventListener("click", () => modal.remove());
-      modal.addEventListener("click", (e) => { if (e.target === modal) modal.remove(); });
-
-      document.getElementById("rds-submit").addEventListener("click", async () => {
-        const name = document.getElementById("rds-name").value.trim();
-        const engine = document.getElementById("rds-engine").value;
-        const networkId = document.getElementById("rds-network").value;
-
-        if (!name) { toast("Nama wajib diisi", "error"); return; }
-
-        const btn = document.getElementById("rds-submit");
-        btn.disabled = true;
-        btn.textContent = "Creating...";
-
-        try {
-          await apis.database.create({ name, engine, network_id: networkId });
-          toast("Database berhasil dibuat!");
-          modal.remove();
-          await loadData();
-          renderList();
-        } catch (err) {
-          toast(err.message, "error");
-          btn.disabled = false;
-          btn.textContent = "Create";
-        }
+        `,
+        actions: [
+          {
+            label: "Create",
+            className: "btn btn-primary",
+            onClick: async ({ close }) => {
+              const name = modal.wrapper.querySelector("#rds-name").value.trim();
+              const engine = modal.wrapper.querySelector("#rds-engine").value;
+              const networkId = modal.wrapper.querySelector("#rds-network").value;
+              if (!name) { toast("Nama wajib diisi", "error"); return; }
+              try {
+                await apis.database.create({ name, engine, network_id: networkId });
+                toast("Database berhasil dibuat!");
+                close();
+                await loadData();
+                render();
+              } catch (e) { toast(errMsg(e), "error"); }
+            },
+          },
+        ],
       });
     }
 
-    // ── Detail panel ──────────────────────────────────────────
-    async function showDetail(dbId) {
+    // ── Detail modal ──
+    async function showDetailModal(dbId) {
       let detail;
       try {
         detail = await apis.database.get(dbId);
-      } catch (err) {
-        toast(err.message, "error");
-        return;
-      }
+      } catch (e) { toast(errMsg(e), "error"); return; }
 
       const isAvailable = detail.status === "available";
       const isStopped = detail.status === "stopped";
 
-      root.innerHTML = `
-        <section class="panel">
-          <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
-            <button id="rds-back" class="btn btn-ghost">← Back</button>
-            <h3 style="margin:0;">${detail.name}</h3>
-            ${statusBadge(detail.status)}
-          </div>
-
-          <div class="grid-2col" style="gap:16px;">
-            <!-- Left: Connection Info -->
-            <div class="panel" style="background:var(--bg-panel-alt,#1a1a2e);padding:16px;border-radius:8px;">
+      const modal = showModal({
+        title: `Database: ${detail.name}`,
+        bodyHtml: `
+          <div class="grid grid-2" style="gap:16px;">
+            <div>
               <h4 style="margin-top:0;">Connection Info</h4>
               <div class="stack-sm">
-                <div class="field-row">
-                  <span class="dim">Host</span>
-                  <code>${detail.ip_address || "pending"}</code>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Port</span>
-                  <code>${detail.port}</code>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Database</span>
-                  <code>${detail.db_name}</code>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Username</span>
-                  <code>${detail.db_user}</code>
-                </div>
+                <div class="field-row"><span class="dim">Host</span><code>${escapeHtml(detail.ip_address || "pending")}</code></div>
+                <div class="field-row"><span class="dim">Port</span><code>${detail.port}</code></div>
+                <div class="field-row"><span class="dim">Database</span><code>${escapeHtml(detail.db_name)}</code></div>
+                <div class="field-row"><span class="dim">Username</span><code>${escapeHtml(detail.db_user)}</code></div>
                 <div class="field-row">
                   <span class="dim">Password</span>
-                  <code id="rds-pw">${detail.db_password}</code>
-                  <button class="btn btn-inline btn-xs rds-copy-btn" data-text="${detail.db_password}" data-label="Password">📋</button>
+                  <code id="modal-db-pw">${escapeHtml(detail.db_password)}</code>
+                  <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.db_password)}" data-label="Password">📋</button>
                 </div>
-
-                <hr style="border-color:var(--border);margin:8px 0;" />
-
+                <hr style="border-color:var(--line);margin:8px 0;" />
                 <div>
                   <span class="dim" style="font-size:12px;">Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
-                    <code style="font-size:11px;word-break:break-all;flex:1;">${detail.connection_string}</code>
-                    <button class="btn btn-inline btn-xs rds-copy-btn" data-text="${detail.connection_string}" data-label="Connection string">📋</button>
+                    <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string)}</code>
+                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.connection_string)}" data-label="Connection string">📋</button>
                   </div>
                 </div>
-
                 <div>
                   <span class="dim" style="font-size:12px;">Async Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
-                    <code style="font-size:11px;word-break:break-all;flex:1;">${detail.connection_string_async}</code>
-                    <button class="btn btn-inline btn-xs rds-copy-btn" data-text="${detail.connection_string_async}" data-label="Async connection string">📋</button>
+                    <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string_async)}</code>
+                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.connection_string_async)}" data-label="Async connection string">📋</button>
                   </div>
                 </div>
-
                 ${detail.public_url ? `
                 <div>
                   <span class="dim" style="font-size:12px;">Public Connection</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
-                    <code style="font-size:11px;word-break:break-all;flex:1;">${detail.public_url}</code>
-                    <button class="btn btn-inline btn-xs rds-copy-btn" data-text="${detail.public_url}" data-label="Public URL">📋</button>
+                    <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.public_url)}</code>
+                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.public_url)}" data-label="Public URL">📋</button>
                   </div>
                 </div>
                 ` : ""}
               </div>
             </div>
-
-            <!-- Right: Details + Actions -->
-            <div class="panel" style="background:var(--bg-panel-alt,#1a1a2e);padding:16px;border-radius:8px;">
-              <h4 style="margin-top:0;">Details</h4>
+            <div>
+              <h4 style="margin-top:0;">Details & Actions</h4>
               <div class="stack-sm">
-                <div class="field-row">
-                  <span class="dim">ID</span>
-                  <code style="font-size:11px;">${detail.id}</code>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Engine</span>
-                  <span>${detail.engine}</span>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Network</span>
-                  <span>${networkName(detail.network_id)}</span>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Public DNS</span>
-                  <span>${detail.public_hostname || "—"}</span>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Public Port</span>
-                  <span>${detail.expose_port || "—"}</span>
-                </div>
-                <div class="field-row">
-                  <span class="dim">Created</span>
-                  <span>${new Date(detail.created_at).toLocaleString()}</span>
-                </div>
+                <div class="field-row"><span class="dim">ID</span><code style="font-size:11px;">${escapeHtml(detail.id)}</code></div>
+                <div class="field-row"><span class="dim">Engine</span><span>${escapeHtml(detail.engine)}</span></div>
+                <div class="field-row"><span class="dim">Network</span><span>${resolveNetworkName(detail.network_id)}</span></div>
+                <div class="field-row"><span class="dim">Public DNS</span><span>${escapeHtml(detail.public_hostname || "—")}</span></div>
+                <div class="field-row"><span class="dim">Created</span><span>${toLocalDate(detail.created_at)}</span></div>
               </div>
-
               <h4>Actions</h4>
               <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                ${isAvailable ? `
-                  <button class="btn btn-ghost rds-action" data-action="stop">⏹ Stop</button>
-                  <button class="btn btn-ghost rds-action" data-action="reboot">🔄 Reboot</button>
-                ` : ""}
-                ${isStopped ? `
-                  <button class="btn btn-primary rds-action" data-action="start">▶ Start</button>
-                ` : ""}
-                ${isAvailable ? `
-                  <button id="rds-reset-pw" class="btn btn-ghost">🔑 Reset Password</button>
-                ` : ""}
-                ${isAvailable && !detail.public_hostname ? `
-                  <button id="rds-expose" class="btn btn-ghost">🌐 Expose Public</button>
-                ` : ""}
-                ${detail.public_hostname ? `
-                  <button id="rds-unexpose" class="btn btn-ghost">🔒 Unexpose</button>
-                ` : ""}
-                <button id="rds-delete" class="btn btn-danger">🗑 Delete</button>
+                ${isAvailable ? `<button class="btn btn-ghost modal-action" data-action="stop">⏹ Stop</button>
+                  <button class="btn btn-ghost modal-action" data-action="reboot">🔄 Reboot</button>` : ""}
+                ${isStopped ? `<button class="btn btn-primary modal-action" data-action="start">▶ Start</button>` : ""}
+                ${isAvailable ? `<button class="btn btn-ghost modal-reset-pw">🔑 Reset Password</button>` : ""}
+                ${isAvailable && !detail.public_hostname ? `<button class="btn btn-ghost modal-expose">🌐 Expose Public</button>` : ""}
+                ${detail.public_hostname ? `<button class="btn btn-ghost modal-unexpose">🔒 Unexpose</button>` : ""}
               </div>
-
-              ${detail.error_message ? `
-                <div class="message error" style="margin-top:12px;">${detail.error_message}</div>
-              ` : ""}
+              ${detail.error_message ? `<div class="message error" style="margin-top:12px;">${escapeHtml(detail.error_message)}</div>` : ""}
             </div>
           </div>
-        </section>
-      `;
-
-      // Back button
-      document.getElementById("rds-back").addEventListener("click", async () => {
-        await loadData();
-        renderList();
+        `,
       });
 
       // Copy buttons
-      root.querySelectorAll(".rds-copy-btn").forEach((btn) => {
+      modal.wrapper.querySelectorAll(".modal-copy-btn").forEach((btn) => {
         btn.addEventListener("click", () => copyText(btn.dataset.text, btn.dataset.label));
       });
 
-      // Action buttons (start/stop/reboot)
-      root.querySelectorAll(".rds-action").forEach((btn) => {
+      // Action buttons
+      modal.wrapper.querySelectorAll(".modal-action").forEach((btn) => {
         btn.addEventListener("click", async () => {
           btn.disabled = true;
           try {
             await apis.database.action(dbId, btn.dataset.action);
             toast(`Database ${btn.dataset.action} berhasil`);
-            await showDetail(dbId);
-          } catch (err) {
-            toast(err.message, "error");
+            modal.close();
+            await loadData();
+            render();
+          } catch (e) {
+            toast(errMsg(e), "error");
             btn.disabled = false;
           }
         });
       });
 
       // Reset password
-      document.getElementById("rds-reset-pw")?.addEventListener("click", async () => {
+      modal.wrapper.querySelector(".modal-reset-pw")?.addEventListener("click", async () => {
         if (!confirm("Reset password database? Connection string akan berubah.")) return;
         try {
-          const result = await apis.database.resetPassword(dbId);
+          await apis.database.resetPassword(dbId);
           toast("Password berhasil direset");
-          await showDetail(dbId);
-        } catch (err) {
-          toast(err.message, "error");
-        }
+          modal.close();
+          await loadData();
+          render();
+        } catch (e) { toast(errMsg(e), "error"); }
       });
 
       // Expose
-      document.getElementById("rds-expose")?.addEventListener("click", async () => {
-        const btn = document.getElementById("rds-expose");
-        btn.disabled = true;
-        btn.textContent = "Exposing...";
+      modal.wrapper.querySelector(".modal-expose")?.addEventListener("click", async () => {
         try {
           await apis.database.expose(dbId);
           toast("Database berhasil di-expose!");
-          await showDetail(dbId);
-        } catch (err) {
-          toast(err.message, "error");
-          btn.disabled = false;
-          btn.textContent = "🌐 Expose Public";
-        }
+          modal.close();
+          await loadData();
+          render();
+        } catch (e) { toast(errMsg(e), "error"); }
       });
 
       // Unexpose
-      document.getElementById("rds-unexpose")?.addEventListener("click", async () => {
-        const btn = document.getElementById("rds-unexpose");
-        btn.disabled = true;
+      modal.wrapper.querySelector(".modal-unexpose")?.addEventListener("click", async () => {
         try {
           await apis.database.unexpose(dbId);
           toast("Database tidak lagi public");
-          await showDetail(dbId);
-        } catch (err) {
-          toast(err.message, "error");
-          btn.disabled = false;
-        }
-      });
-
-      // Delete
-      document.getElementById("rds-delete")?.addEventListener("click", async () => {
-        if (!confirm(`Hapus database "${detail.name}"? Data akan hilang permanen.`)) return;
-        try {
-          await apis.database.delete(dbId);
-          toast("Database dihapus");
+          modal.close();
           await loadData();
-          renderList();
-        } catch (err) {
-          toast(err.message, "error");
-        }
+          render();
+        } catch (e) { toast(errMsg(e), "error"); }
       });
     }
 
-    // ── Init ─────────────────────────────────────────────────
+    // ── Init ──
     await loadData();
-    renderList();
+    render();
   },
 };

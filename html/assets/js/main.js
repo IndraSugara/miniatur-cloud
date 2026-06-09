@@ -28,9 +28,25 @@ const elements = {
   viewRoot: document.getElementById("view-root"),
   navItems: Array.from(document.querySelectorAll(".nav-item")),
   monitorBtn: document.getElementById("open-monitor"),
-  storageBtn: document.getElementById("open-storage"),
+  storageBtn: document.getElementById("open-storage-console"),
   docsBtn: document.getElementById("open-docs"),
+  workspaceSelect: document.getElementById("workspace-select"),
 };
+
+/** Refresh the workspace dropdown from state.networks. */
+function refreshWorkspaceDropdown() {
+  const sel = elements.workspaceSelect;
+  if (!sel) return;
+  const current = sel.value;
+  sel.innerHTML = `<option value="">All Resources</option>`;
+  (state.networks || []).forEach((net) => {
+    const opt = document.createElement("option");
+    opt.value = net.id;
+    opt.textContent = `${net.name} (${net.cidr || "auto"})`;
+    if (net.id === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
 
 function setLoggedOutUI() {
   elements.loginScreen.classList.remove("hidden");
@@ -58,7 +74,12 @@ async function mountView(viewId) {
   });
 
   elements.viewTitle.textContent = nextView.title;
-  elements.viewSubtitle.textContent = nextView.subtitle;
+  const wsNet = state.activeWorkspace
+    ? (state.networks || []).find((n) => n.id === state.activeWorkspace)
+    : null;
+  elements.viewSubtitle.textContent = wsNet
+    ? `${nextView.subtitle} — Workspace: ${wsNet.name}`
+    : nextView.subtitle;
 
   if (typeof state.activeCleanup === "function") {
     state.activeCleanup();
@@ -72,6 +93,7 @@ async function mountView(viewId) {
       apis,
       navigate: (targetView) => mountView(targetView),
       state,
+      refreshWorkspaces: refreshWorkspaceDropdown,
     });
     state.activeCleanup = typeof cleanup === "function" ? cleanup : null;
   } catch (error) {
@@ -102,6 +124,15 @@ async function bootstrapApp() {
   }
   elements.monitorBtn.classList.toggle("hidden", !me.is_admin);
 
+  // Load networks for workspace dropdown
+  try {
+    const netsPayload = await apis.network.listNetworks();
+    state.networks = netsPayload.networks || [];
+  } catch {
+    state.networks = [];
+  }
+  refreshWorkspaceDropdown();
+
   setLoggedInUI();
   await mountView(state.activeView);
 }
@@ -113,6 +144,8 @@ function logout() {
   }
   state.user = null;
   state.activeView = "dashboard";
+  state.activeWorkspace = null;
+  state.networks = [];
   apis.auth.clear();
   setLoggedOutUI();
 }
@@ -151,6 +184,14 @@ elements.navItems.forEach((item) => {
 });
 
 elements.refreshViewBtn.addEventListener("click", () => {
+  mountView(state.activeView).catch((error) => {
+    toast(error instanceof Error ? error.message : String(error), "error");
+  });
+});
+
+// Workspace selector
+elements.workspaceSelect.addEventListener("change", () => {
+  state.activeWorkspace = elements.workspaceSelect.value || null;
   mountView(state.activeView).catch((error) => {
     toast(error instanceof Error ? error.message : String(error), "error");
   });
