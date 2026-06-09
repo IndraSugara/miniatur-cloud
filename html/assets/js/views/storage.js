@@ -61,11 +61,15 @@ export const storageView = {
       <section class="panel">
         <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
           <h3 style="margin:0;">Buckets</h3>
-          <form id="bucket-create-form" class="toolbar">
-            <input id="bucket-name" placeholder="my-bucket (optional)" style="width:200px;" />
-            <button class="btn btn-inline btn-primary" type="submit">Create Bucket</button>
-          </form>
         </div>
+        <form id="bucket-create-form" class="toolbar" style="margin-bottom:10px;">
+          <input id="bucket-name" placeholder="nama-bucket (opsional)" style="width:180px;" />
+          <select id="bucket-network" style="width:180px;">
+            <option value="">Global (no network)</option>
+          </select>
+          <button class="btn btn-inline btn-primary" type="submit">Create Bucket</button>
+        </form>
+        <p class="dim" style="font-size:11px;margin-bottom:10px;">Bucket bersifat global seperti AWS S3. Pilih network untuk mengelompokkan bucket dengan resource project.</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -235,14 +239,32 @@ export const storageView = {
     }
 
     async function loadAll() {
-      const [volumePayload, bucketPayload, instancePayload] = await Promise.all([
+      const [volumePayload, bucketPayload, instancePayload, netPayload] = await Promise.all([
         apis.storage.listVolumes(),
         apis.storage.listBuckets(),
         apis.compute.listInstances(),
+        apis.network.listNetworks(),
       ]);
       volumes = volumePayload.volumes || [];
       buckets = bucketPayload.buckets || [];
       instances = instancePayload.instances || [];
+      const networks = netPayload.networks || [];
+      state.networks = networks; // keep in sync for workspace selector
+
+      // Populate bucket network dropdown
+      const netSelect = root.querySelector("#bucket-network");
+      if (netSelect) {
+        const currentVal = netSelect.value;
+        netSelect.innerHTML = `<option value="">Global (no network)</option>`;
+        networks.forEach((n) => {
+          const opt = document.createElement("option");
+          opt.value = n.id;
+          opt.textContent = `${n.name} (${n.cidr || "auto"})`;
+          if (n.id === activeWs) opt.selected = true;
+          netSelect.appendChild(opt);
+        });
+      }
+
       renderVolumes();
       renderBuckets();
       await loadObjects();
@@ -342,11 +364,14 @@ export const storageView = {
     root.querySelector("#bucket-create-form").addEventListener("submit", async (event) => {
       event.preventDefault();
       const name = root.querySelector("#bucket-name").value.trim();
+      const networkId = root.querySelector("#bucket-network").value || null;
       try {
-        const netId = activeWs || null;
-        await apis.storage.createBucket(name || null, netId);
-        toast(netId ? "Bucket dibuat dalam workspace." : "Bucket dibuat.");
+        await apis.storage.createBucket(name || null, networkId);
+        toast(networkId ? "Bucket dibuat dan dikaitkan dengan network." : "Bucket global dibuat.");
         event.target.reset();
+        // Re-select active workspace in dropdown after reset
+        const netSelect = root.querySelector("#bucket-network");
+        if (netSelect && activeWs) netSelect.value = activeWs;
         await loadAll();
       } catch (error) { toast(em(error), "error"); }
     });
