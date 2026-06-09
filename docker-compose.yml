@@ -18,8 +18,8 @@ services:
     image: minio/minio:latest
     container_name: cloud-storage
     ports:
-      - "127.0.0.1:9000:9000"
-      - "127.0.0.1:9001:9001"
+      - "9000:9000"
+      - "127.0.0.1:9001:9001"  # Console stays localhost-only
     volumes:
       - minio-data:/data
     command: server /data --console-address ":9001"
