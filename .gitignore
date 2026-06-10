@@ -7,3 +7,4 @@ sshpiper/sshpiperd.yaml
 iaas-api/iaas.db
 agents.md
 AGENTS.md
+*.md
