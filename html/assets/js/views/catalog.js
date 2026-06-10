@@ -28,16 +28,24 @@ export const catalogView = {
 
     const imageListEl = root.querySelector("#image-list");
     if (images.length === 0) {
-      imageListEl.innerHTML = `<div class="empty-state" style="padding:20px 0;"><div class="empty-icon">📦</div><p>Tidak ada image tersedia.</p></div>`;
+      imageListEl.innerHTML = `<div class="empty-state" style="padding:20px 0;"><div class="empty-icon"><img src="/assets/icons/mountains.png" alt="" width="40" height="40" style="opacity:0.5;" /></div><p>Tidak ada image tersedia.</p></div>`;
     } else {
       imageListEl.innerHTML = `<div class="stack-sm">${images.map((item) => {
         const key = typeof item === "string" ? item : item.key;
         const desc = typeof item === "object" && item.description ? item.description : "";
-        const icon = key.includes("ubuntu") ? "🐧" : key.includes("alpine") ? "🏔" : key.includes("debian") ? "🌀" : "💿";
+        const keyLower = key.toLowerCase();
+        let iconSrc = null;
+        if (keyLower.includes("ubuntu")) iconSrc = "/assets/icons/ubuntu.png";
+        else if (keyLower.includes("alpine")) iconSrc = "/assets/icons/mountains.png";
+        else if (keyLower.includes("debian")) iconSrc = "/assets/icons/debian.png";
+        else if (keyLower.includes("nginx")) iconSrc = "/assets/icons/nginx.png";
+        const iconHtml = iconSrc
+          ? `<img src="${iconSrc}" alt="" width="22" height="22" style="object-fit:contain;" />`
+          : `<span style="font-size:22px;">💿</span>`;
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface);transition:border-color 0.15s;"
                onmouseenter="this.style.borderColor='var(--glass-hover)'" onmouseleave="this.style.borderColor='var(--border)'">
-            <span style="font-size:22px;">${icon}</span>
+            <span style="font-size:22px;">${iconHtml}</span>
             <div>
               <div class="mono" style="font-weight:600;">${escapeHtml(key)}</div>
               ${desc ? `<div class="muted" style="font-size:12px;">${escapeHtml(desc)}</div>` : ""}

@@ -64,7 +64,7 @@ export const computeView = {
             <input id="inst-tags" placeholder="env=dev, project=demo" />
           </div>
           <div class="toolbar">
-            <button id="create-instance-btn" class="btn btn-primary" type="submit">🚀 Launch Instance</button>
+            <button id="create-instance-btn" class="btn btn-primary" type="submit"><img src="/assets/icons/launch.png" alt="" width="16" height="16" style="vertical-align:middle;" /> Launch Instance</button>
           </div>
         </form>
         <p id="create-instance-message" class="message hidden"></p>

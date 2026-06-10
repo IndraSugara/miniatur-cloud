@@ -82,7 +82,7 @@ export const databaseView = {
 
           ${filtered.length === 0
             ? `<div class="empty-state" style="padding:24px 0;">
-                <div class="empty-icon">🗄</div>
+                <div class="empty-icon"><img src="/assets/icons/database.png" alt="" width="40" height="40" style="opacity:0.5;" /></div>
                 <p>Belum ada database${activeWs ? " di workspace ini" : ""}.</p>
                 <button class="btn btn-primary btn-inline" id="rds-create-btn-empty">+ Create Database</button>
               </div>`

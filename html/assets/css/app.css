@@ -694,6 +694,12 @@ input::placeholder { color: var(--text-muted); }
   opacity: 0.7;
 }
 
+.nav-icon img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+}
+
 .nav-item.active .nav-icon { opacity: 1; }
 .nav-item.active .nav-icon svg { color: #ff8c00; }
 
@@ -1369,6 +1375,12 @@ tr:hover td {
   place-items: center;
   font-size: 20px;
   flex-shrink: 0;
+}
+
+.stat-icon img {
+  width: 22px;
+  height: 22px;
+  object-fit: contain;
 }
 
 .stat-icon.compute  { background: rgba(255,140,0,0.1); color: #ff8c00; }

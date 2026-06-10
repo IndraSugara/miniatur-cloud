@@ -409,7 +409,7 @@ export const storageView = {
         title: `Upload to ${activeBucket}`,
         bodyHtml: `
           <div class="upload-zone" id="upload-drop-zone">
-            <div class="icon">📁</div>
+            <div class="icon"><img src="/assets/icons/storage.png" alt="" width="32" height="32" style="opacity:0.7;" /></div>
             <p>Klik atau drag file ke sini</p>
             <input type="file" id="upload-file-input" style="display:none;" />
             <p class="muted" style="font-size:12px;margin-top:8px;">File akan di-upload via presigned URL</p>

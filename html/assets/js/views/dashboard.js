@@ -16,7 +16,7 @@ export const dashboardView = {
     root.innerHTML = `
       <div class="grid grid-4" id="stat-cards">
         <div class="stat-card">
-          <div class="stat-icon compute">⚡</div>
+          <div class="stat-icon compute"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/></svg></div>
           <div class="stat-body">
             <div class="stat-value" id="s-instances">-</div>
             <div class="stat-label">Instances</div>
@@ -24,7 +24,7 @@ export const dashboardView = {
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon database">🗄</div>
+          <div class="stat-icon database"><img src="/assets/icons/database.png" alt="" width="22" height="22" /></div>
           <div class="stat-body">
             <div class="stat-value" id="s-databases">-</div>
             <div class="stat-label">Databases</div>
@@ -32,7 +32,7 @@ export const dashboardView = {
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon storage">📦</div>
+          <div class="stat-icon storage"><img src="/assets/icons/storage.png" alt="" width="22" height="22" /></div>
           <div class="stat-body">
             <div class="stat-value" id="s-buckets">-</div>
             <div class="stat-label">Buckets</div>
@@ -40,7 +40,7 @@ export const dashboardView = {
           </div>
         </div>
         <div class="stat-card">
-          <div class="stat-icon network">🌐</div>
+          <div class="stat-icon network"><img src="/assets/icons/network.png" alt="" width="22" height="22" /></div>
           <div class="stat-body">
             <div class="stat-value" id="s-networks">-</div>
             <div class="stat-label">Networks</div>
@@ -267,7 +267,7 @@ export const dashboardView = {
         if (userNetworks.length === 0) {
           wsContent.innerHTML = `
             <div class="empty-state" style="padding:20px 0;">
-              <div class="empty-icon">🌐</div>
+              <div class="empty-icon"><img src="/assets/icons/network.png" alt="" width="40" height="40" style="opacity:0.5;" /></div>
               <p>Belum ada workspace. Buat network dulu untuk memulai project.</p>
               <button class="btn btn-primary btn-inline" data-nav="network">Buat Network</button>
             </div>
@@ -284,7 +284,7 @@ export const dashboardView = {
                   <div class="meta"><span class="mono">${escapeHtml(net.cidr || "auto")}</span>${net.gateway ? " / gw " + escapeHtml(net.gateway) : ""}</div>
                   <div class="stats">
                     <span>⚡ ${netInstances.length} instance${netRunning ? ` (${netRunning} running)` : ""}</span>
-                    <span>🗄 ${netDbs.length} database</span>
+                    <span><img src="/assets/icons/database.png" alt="" width="14" height="14" style="vertical-align:middle;" /> ${netDbs.length} database</span>
                   </div>
                 </div>
               `;
