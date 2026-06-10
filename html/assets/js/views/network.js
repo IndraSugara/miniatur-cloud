@@ -113,7 +113,7 @@ export const networkView = {
               <td class="mono">${escapeHtml(n.gateway || "-")}</td>
               <td>${n.is_default ? '<span class="badge badge-dim">default</span>' : ""}</td>
               <td>
-                ${!n.is_default ? `<button class="btn btn-inline btn-ghost" data-ws-select="${n.id}">🔍 Focus</button>` : '<span class="dim">—</span>'}
+                ${!n.is_default ? `<button class="btn btn-inline btn-ghost" data-ws-select="${n.id}"><img src="/assets/icons/search&focus.png" alt="" width="14" height="14" style="vertical-align:middle;" /> Focus</button>` : '<span class="dim">—</span>'}
               </td>
               <td>${
                 n.is_default

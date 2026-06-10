@@ -455,12 +455,12 @@ export const storageView = {
             throw new Error(`Upload failed: HTTP ${uploadRes.status}`);
           }
 
-          statusEl.textContent = `✅ ${file.name} berhasil diupload!`;
+          statusEl.innerHTML = `<img src="/assets/icons/upload-success.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${em(file.name)} berhasil diupload!`;
           statusEl.className = "message ok";
           modal.close();
           await loadObjects();
         } catch (error) {
-          statusEl.textContent = `❌ ${em(error)}`;
+          statusEl.innerHTML = `<img src="/assets/icons/upload-error.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${em(error)}`;
           statusEl.className = "message error";
         }
       }

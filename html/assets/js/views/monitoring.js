@@ -13,7 +13,7 @@ export const monitoringView = {
             <h3>Monitoring Infra</h3>
           </div>
           <div class="empty-state" style="padding:30px 0;">
-            <div class="empty-icon">🔒</div>
+            <div class="empty-icon"><img src="/assets/icons/admin.png" alt="" width="40" height="40" style="opacity:0.5;" /></div>
             <p>Akses monitoring host hanya untuk admin.</p>
             <p class="muted" style="font-size:13px;">User biasa hanya bisa memantau status instance miliknya di halaman Compute.</p>
           </div>

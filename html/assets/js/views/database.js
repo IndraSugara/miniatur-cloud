@@ -255,7 +255,7 @@ export const databaseView = {
                   <span class="muted">Password</span>
                   <span style="display:flex;align-items:center;gap:4px;">
                     <code class="mono" id="modal-db-pw">${escapeHtml(detail.db_password)}</code>
-                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.db_password)}" data-label="Password">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.db_password)}" data-label="Password"><img src="/assets/icons/copy.png" alt="" width="14" height="14" style="vertical-align:middle;" /></button>
                   </span>
                 </div>
                 <hr style="border-color:var(--border-subtle);margin:6px 0;" />
@@ -263,14 +263,14 @@ export const databaseView = {
                   <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string)}</code>
-                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string)}" data-label="Connection string">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string)}" data-label="Connection string"><img src="/assets/icons/copy.png" alt="" width="14" height="14" style="vertical-align:middle;" /></button>
                   </div>
                 </div>
                 <div>
                   <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Async Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string_async)}</code>
-                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string_async)}" data-label="Async connection string">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string_async)}" data-label="Async connection string"><img src="/assets/icons/copy.png" alt="" width="14" height="14" style="vertical-align:middle;" /></button>
                   </div>
                 </div>
                 ${detail.public_url ? `
@@ -278,7 +278,7 @@ export const databaseView = {
                   <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Public Connection</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.public_url)}</code>
-                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.public_url)}" data-label="Public URL">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.public_url)}" data-label="Public URL"><img src="/assets/icons/copy.png" alt="" width="14" height="14" style="vertical-align:middle;" /></button>
                   </div>
                 </div>
                 ` : ""}
@@ -296,11 +296,11 @@ export const databaseView = {
               <h4 style="margin:16px 0 8px;font-size:14px;color:var(--text-secondary);">Actions</h4>
               <div style="display:flex;flex-wrap:wrap;gap:6px;">
                 ${isAvailable ? `<button class="btn btn-inline modal-action" data-action="stop">⏹ Stop</button>
-                  <button class="btn btn-inline modal-action" data-action="reboot">🔄 Reboot</button>` : ""}
+                  <button class="btn btn-inline modal-action" data-action="reboot"><img src="/assets/icons/reboot.png" alt="" width="14" height="14" style="vertical-align:middle;" /> Reboot</button>` : ""}
                 ${isStopped ? `<button class="btn btn-inline btn-success modal-action" data-action="start">▶ Start</button>` : ""}
-                ${isAvailable ? `<button class="btn btn-inline modal-reset-pw">🔑 Reset Password</button>` : ""}
-                ${isAvailable && !detail.public_hostname ? `<button class="btn btn-inline modal-expose">🌐 Expose Public</button>` : ""}
-                ${detail.public_hostname ? `<button class="btn btn-inline btn-danger modal-unexpose">🔒 Unexpose</button>` : ""}
+                ${isAvailable ? `<button class="btn btn-inline modal-reset-pw"><img src="/assets/icons/reset-password.png" alt="" width="14" height="14" style="vertical-align:middle;" /> Reset Password</button>` : ""}
+                ${isAvailable && !detail.public_hostname ? `<button class="btn btn-inline modal-expose"><img src="/assets/icons/expose.png" alt="" width="14" height="14" style="vertical-align:middle;" /> Expose Public</button>` : ""}
+                ${detail.public_hostname ? `<button class="btn btn-inline btn-danger modal-unexpose"><img src="/assets/icons/unexpose.png" alt="" width="14" height="14" style="vertical-align:middle;" /> Unexpose</button>` : ""}
               </div>
               ${detail.error_message ? `<div class="message error" style="margin-top:12px;">${escapeHtml(detail.error_message)}</div>` : ""}
             </div>

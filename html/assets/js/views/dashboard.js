@@ -16,7 +16,7 @@ export const dashboardView = {
     root.innerHTML = `
       <div class="grid grid-4" id="stat-cards">
         <div class="stat-card">
-          <div class="stat-icon compute"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/></svg></div>
+          <div class="stat-icon compute"><img src="/assets/icons/server-dan-instance.png" alt="" width="22" height="22" /></div>
           <div class="stat-body">
             <div class="stat-value" id="s-instances">-</div>
             <div class="stat-label">Instances</div>
@@ -283,7 +283,7 @@ export const dashboardView = {
                   <h3>${escapeHtml(net.name)}</h3>
                   <div class="meta"><span class="mono">${escapeHtml(net.cidr || "auto")}</span>${net.gateway ? " / gw " + escapeHtml(net.gateway) : ""}</div>
                   <div class="stats">
-                    <span>⚡ ${netInstances.length} instance${netRunning ? ` (${netRunning} running)` : ""}</span>
+                    <span><img src="/assets/icons/server-dan-instance.png" alt="" width="14" height="14" style="vertical-align:middle;" /> ${netInstances.length} instance${netRunning ? ` (${netRunning} running)` : ""}</span>
                     <span><img src="/assets/icons/database.png" alt="" width="14" height="14" style="vertical-align:middle;" /> ${netDbs.length} database</span>
                   </div>
                 </div>

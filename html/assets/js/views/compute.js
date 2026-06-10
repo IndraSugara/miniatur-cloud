@@ -380,7 +380,7 @@ export const computeView = {
             <div class="muted" style="margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Expose App to Internet</div>
             ${detail.public_url ? `
               <div style="display:flex;align-items:center;gap:8px;">
-                <span class="mono" style="font-size:0.85rem;">🌐 <a href="${escapeHtml(detail.public_url)}" target="_blank" class="resource-link">${escapeHtml(detail.public_hostname)}</a></span>
+                <span class="mono" style="font-size:0.85rem;"><img src="/assets/icons/public-url.png" alt="" width="14" height="14" style="vertical-align:middle;" /> <a href="${escapeHtml(detail.public_url)}" target="_blank" class="resource-link">${escapeHtml(detail.public_hostname)}</a></span>
                 <span class="muted">→ port ${detail.expose_port}</span>
                 <button id="modal-unexpose" class="btn btn-inline btn-danger">Unexpose</button>
               </div>
