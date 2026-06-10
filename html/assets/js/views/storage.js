@@ -21,23 +21,22 @@ function formatSize(bytes) {
 
 export const storageView = {
   id: "storage",
-  title: "Storage",
+  title: "Volumes & S3",
   subtitle: "Kelola block volume dan object storage (bucket/object).",
   async mount(root, { apis, navigate, state }) {
     const activeWs = state.activeWorkspace;
 
     root.innerHTML = `
       <section class="panel">
-        <h3>Create Volume</h3>
-        <form id="volume-create-form" class="toolbar">
-          <input id="vol-name" placeholder="data-volume" required />
-          <input id="vol-size" type="number" min="1" max="20" value="2" required />
-          <button class="btn btn-inline btn-primary" type="submit">Create Volume</button>
-        </form>
-      </section>
-
-      <section class="panel">
-        <h3>Volumes</h3>
+        <div class="panel-header">
+          <h3>Block Volumes</h3>
+          <form id="volume-create-form" class="toolbar">
+            <input id="vol-name" placeholder="data-volume" required style="width:160px;" />
+            <input id="vol-size" type="number" min="1" max="20" value="2" required style="width:70px;" />
+            <span class="muted" style="font-size:12px;">GB</span>
+            <button class="btn btn-primary btn-inline" type="submit">Create</button>
+          </form>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -59,17 +58,16 @@ export const storageView = {
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
-          <h3 style="margin:0;">Buckets</h3>
+        <div class="panel-header">
+          <h3>Object Storage (S3)</h3>
+          <form id="bucket-create-form" class="toolbar">
+            <input id="bucket-name" placeholder="nama-bucket (opsional)" style="width:160px;" />
+            <select id="bucket-network" style="width:160px;">
+              <option value="">Global (no network)</option>
+            </select>
+            <button class="btn btn-primary btn-inline" type="submit">Create Bucket</button>
+          </form>
         </div>
-        <form id="bucket-create-form" class="toolbar" style="margin-bottom:10px;">
-          <input id="bucket-name" placeholder="nama-bucket (opsional)" style="width:180px;" />
-          <select id="bucket-network" style="width:180px;">
-            <option value="">Global (no network)</option>
-          </select>
-          <button class="btn btn-inline btn-primary" type="submit">Create Bucket</button>
-        </form>
-        <p class="dim" style="font-size:11px;margin-bottom:10px;">Bucket bersifat global seperti AWS S3. Pilih network untuk mengelompokkan bucket dengan resource project.</p>
         <div class="table-wrap">
           <table>
             <thead>
@@ -89,11 +87,11 @@ export const storageView = {
       </section>
 
       <section class="panel" id="objects-panel">
-        <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
-          <h3 id="object-title" style="margin:0;">Objects</h3>
+        <div class="panel-header">
+          <h3 id="object-title">Objects</h3>
           <div class="toolbar">
             <form id="object-filter-form" class="toolbar">
-              <input id="object-prefix" placeholder="prefix/" style="width:150px;" />
+              <input id="object-prefix" placeholder="prefix/" style="width:140px;" />
               <button class="btn btn-inline" type="submit">Filter</button>
             </form>
             <button id="upload-object-btn" class="btn btn-inline btn-primary" disabled>Upload</button>
@@ -138,12 +136,12 @@ export const storageView = {
         .map(
           (item) => `
             <tr>
-              <td>${escapeHtml(item.name)}</td>
+              <td><strong>${escapeHtml(item.name)}</strong></td>
               <td>${item.size_gb} GB</td>
-              <td>${item.status}</td>
-              <td class="mono">${escapeHtml(item.attached_instance_id || "-")}</td>
-              <td class="mono">${escapeHtml(item.mount_path || "-")}</td>
-              <td>${toLocalDate(item.created_at)}</td>
+              <td><span class="status ${item.status === 'available' ? 'available' : 'attached'}">${item.status}</span></td>
+              <td class="mono" style="font-size:12px;">${escapeHtml(item.attached_instance_id || "-")}</td>
+              <td class="mono" style="font-size:12px;">${escapeHtml(item.mount_path || "-")}</td>
+              <td class="muted">${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
                   ${
@@ -164,7 +162,6 @@ export const storageView = {
 
     function resolveNetworkName(networkId) {
       if (!networkId) return '<span class="dim">—</span>';
-      // Look up from state networks or cached network list
       const net = (state.networks || []).find((n) => n.id === networkId);
       return net ? escapeHtml(net.name) : '<span class="dim">' + escapeHtml(networkId.slice(0, 8) + '…') + '</span>';
     }
@@ -182,10 +179,10 @@ export const storageView = {
         .map(
           (item) => `
             <tr>
-              <td class="mono">${escapeHtml(item.name)}</td>
+              <td class="mono"><strong>${escapeHtml(item.name)}</strong></td>
               <td>${resolveNetworkName(item.network_id)}</td>
-              <td class="mono" style="font-size:11px;">${escapeHtml(item.owner_id ? item.owner_id.slice(0,8)+'…' : '-')}</td>
-              <td>${toLocalDate(item.created_at)}</td>
+              <td class="mono muted" style="font-size:11px;">${escapeHtml(item.owner_id ? item.owner_id.slice(0,8)+'…' : '-')}</td>
+              <td class="muted">${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
                   <button class="btn btn-inline" data-bucket-open="${item.name}">Browse</button>
@@ -221,7 +218,7 @@ export const storageView = {
               <tr>
                 <td class="mono" style="max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escapeHtml(item.key)}">${escapeHtml(item.key)}</td>
                 <td>${formatSize(item.size)}</td>
-                <td>${item.last_modified ? toLocalDate(item.last_modified) : "-"}</td>
+                <td class="muted">${item.last_modified ? toLocalDate(item.last_modified) : "-"}</td>
                 <td>
                   <div class="actions">
                     <button class="btn btn-inline" data-obj-dl="${item.key}">Download</button>
@@ -249,9 +246,8 @@ export const storageView = {
       buckets = bucketPayload.buckets || [];
       instances = instancePayload.instances || [];
       const networks = netPayload.networks || [];
-      state.networks = networks; // keep in sync for workspace selector
+      state.networks = networks;
 
-      // Populate bucket network dropdown
       const netSelect = root.querySelector("#bucket-network");
       if (netSelect) {
         const currentVal = netSelect.value;
@@ -318,7 +314,7 @@ export const storageView = {
         const modal = showModal({
           title: "Attach Volume",
           bodyHtml: `
-            <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">Instance akan restart sebentar. Software terinstall tetap tersimpan.</p>
+            <p class="muted" style="margin-bottom:8px;font-size:12px;">Instance akan restart sebentar. Software terinstall tetap tersimpan.</p>
             <div class="grid grid-2">
               <div>
                 <label class="field-label" for="vol-attach-inst">Instance</label>
@@ -369,7 +365,6 @@ export const storageView = {
         await apis.storage.createBucket(name || null, networkId);
         toast(networkId ? "Bucket dibuat dan dikaitkan dengan network." : "Bucket global dibuat.");
         event.target.reset();
-        // Re-select active workspace in dropdown after reset
         const netSelect = root.querySelector("#bucket-network");
         if (netSelect && activeWs) netSelect.value = activeWs;
         await loadAll();
@@ -417,9 +412,9 @@ export const storageView = {
             <div class="icon">📁</div>
             <p>Klik atau drag file ke sini</p>
             <input type="file" id="upload-file-input" style="display:none;" />
-            <p class="dim" style="font-size:12px;margin-top:8px;">File akan di-upload via presigned URL</p>
+            <p class="muted" style="font-size:12px;margin-top:8px;">File akan di-upload via presigned URL</p>
           </div>
-          <div id="upload-status" class="dim" style="margin-top:10px;text-align:center;"></div>
+          <div id="upload-status" class="muted" style="margin-top:10px;text-align:center;"></div>
         `,
       });
 
@@ -445,13 +440,11 @@ export const storageView = {
         statusEl.textContent = `Uploading ${file.name} (${formatSize(file.size)})...`;
         statusEl.className = "";
         try {
-          // Get presigned URL
           const presigned = await apis.storage.presignUpload(activeBucket, {
             object_key: file.name,
             expiry_seconds: 3600,
           });
 
-          // Upload via presigned PUT
           const uploadRes = await fetch(presigned.url, {
             method: "PUT",
             body: file,
@@ -497,7 +490,6 @@ export const storageView = {
             object_key: viewKey,
             expiry_seconds: 300,
           });
-          // Try to fetch and preview
           const res = await fetch(presigned.url);
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           const contentType = res.headers.get("content-type") || "";
@@ -508,7 +500,7 @@ export const storageView = {
             title: `Preview: ${viewKey}`,
             bodyHtml: isText
               ? `<div class="object-preview">${escapeHtml(text.slice(0, 50000))}${text.length > 50000 ? "\n\n... (truncated)" : ""}</div>`
-              : `<p class="dim">Binary file (${contentType || "unknown type"}) — tidak bisa dipreview.</p>
+              : `<p class="muted">Binary file (${contentType || "unknown type"}) — tidak bisa dipreview.</p>
                  <a href="${presigned.url}" target="_blank" class="btn btn-inline" style="margin-top:8px;">Download langsung</a>`,
           });
         } catch (error) {
@@ -524,7 +516,6 @@ export const storageView = {
             object_key: downloadKey,
             expiry_seconds: 3600,
           });
-          // Open download in new tab
           window.open(presigned.url, "_blank", "noopener");
           toast("Download dimulai di tab baru.");
         } catch (error) { toast(em(error), "error"); }

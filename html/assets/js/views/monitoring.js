@@ -9,9 +9,14 @@ export const monitoringView = {
     if (!state.user?.is_admin) {
       root.innerHTML = `
         <section class="panel">
-          <h3>Monitoring Infra</h3>
-          <p class="message error">Akses monitoring host hanya untuk admin.</p>
-          <p class="dim">User biasa hanya bisa memantau status instance miliknya di halaman Compute.</p>
+          <div class="panel-header">
+            <h3>Monitoring Infra</h3>
+          </div>
+          <div class="empty-state" style="padding:30px 0;">
+            <div class="empty-icon">🔒</div>
+            <p>Akses monitoring host hanya untuk admin.</p>
+            <p class="muted" style="font-size:13px;">User biasa hanya bisa memantau status instance miliknya di halaman Compute.</p>
+          </div>
         </section>
       `;
       return () => {};
@@ -19,7 +24,9 @@ export const monitoringView = {
 
     root.innerHTML = `
       <section class="panel">
-        <h3>Host Metrics Live</h3>
+        <div class="panel-header">
+          <h3>Host Metrics Live</h3>
+        </div>
         <div class="grid grid-3">
           <div class="metric">
             <div class="label">CPU</div>
@@ -42,24 +49,26 @@ export const monitoringView = {
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
+        <div class="panel-header">
           <h3>Grafana Dashboard</h3>
-          <button id="open-grafana-tab" class="btn btn-inline btn-ghost">Open in New Tab</button>
+          <button id="open-grafana-tab" class="btn btn-inline btn-ghost">Open in New Tab ↗</button>
         </div>
-        <div style="border-radius:var(--radius);overflow:hidden;border:1px solid var(--line);">
+        <div style="border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);">
           <iframe id="grafana-frame" src="/monitor/"
-            style="width:100%;height:500px;border:none;background:var(--panel);"
+            style="width:100%;height:500px;border:none;background:var(--bg-surface);"
             loading="lazy"></iframe>
         </div>
-        <p class="dim" style="margin-top:8px;font-size:0.8rem;">
+        <p class="muted" style="margin-top:8px;font-size:12px;">
           Jika Grafana tidak muncul, pastikan container cloud-dashboard sudah running.
           Login default: admin / admin
         </p>
       </section>
 
       <section class="panel">
-        <h3>Raw Host Payload</h3>
-        <pre id="raw-monitor" class="mono dim"><span class="spinner"></span> Memuat...</pre>
+        <div class="panel-header">
+          <h3>Raw Host Payload</h3>
+        </div>
+        <pre id="raw-monitor" class="mono" style="max-height:300px;overflow:auto;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:12px;"><span class="spinner"></span> Memuat...</pre>
       </section>
     `;
 
@@ -80,15 +89,24 @@ export const monitoringView = {
 
     async function load() {
       const payload = await apis.monitor.host();
-      cpu.textContent = `${Number(payload.cpu_percent || 0).toFixed(1)}%`;
-      mem.textContent = `${Number(payload.memory_percent || 0).toFixed(1)}%`;
-      disk.textContent = `${Number(payload.disk_percent || 0).toFixed(1)}%`;
+      const cpuVal = Number(payload.cpu_percent || 0);
+      const memVal = Number(payload.memory_percent || 0);
+      const diskVal = Number(payload.disk_percent || 0);
+
+      cpu.textContent = `${cpuVal.toFixed(1)}%`;
+      mem.textContent = `${memVal.toFixed(1)}%`;
+      disk.textContent = `${diskVal.toFixed(1)}%`;
       memSub.textContent = `${payload.memory_used_gb} / ${payload.memory_total_gb} GB`;
       diskSub.textContent = `${payload.disk_used_gb} / ${payload.disk_total_gb} GB`;
 
-      cpuBar.style.width = `${clampPercent(payload.cpu_percent)}%`;
-      memBar.style.width = `${clampPercent(payload.memory_percent)}%`;
-      diskBar.style.width = `${clampPercent(payload.disk_percent)}%`;
+      cpuBar.style.width = `${clampPercent(cpuVal)}%`;
+      memBar.style.width = `${clampPercent(memVal)}%`;
+      diskBar.style.width = `${clampPercent(diskVal)}%`;
+
+      // Color thresholds
+      cpuBar.parentElement.className = `progress${cpuVal > 80 ? " danger" : cpuVal > 60 ? " warn" : ""}`;
+      memBar.parentElement.className = `progress${memVal > 80 ? " danger" : memVal > 60 ? " warn" : ""}`;
+      diskBar.parentElement.className = `progress${diskVal > 80 ? " danger" : diskVal > 60 ? " warn" : ""}`;
 
       raw.textContent = JSON.stringify(payload, null, 2);
     }

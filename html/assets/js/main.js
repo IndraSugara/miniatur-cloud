@@ -24,7 +24,6 @@ const elements = {
   loginEmail: document.getElementById("login-email"),
   registerFields: document.getElementById("register-fields"),
   toggleRegister: document.getElementById("toggle-register"),
-  userChip: document.getElementById("user-chip"),
   logoutBtn: document.getElementById("logout-btn"),
   refreshViewBtn: document.getElementById("refresh-view"),
   viewTitle: document.getElementById("view-title"),
@@ -35,6 +34,17 @@ const elements = {
   storageBtn: document.getElementById("open-storage-console"),
   docsBtn: document.getElementById("open-docs"),
   workspaceSelect: document.getElementById("workspace-select"),
+  // New shell elements
+  sidebar: document.getElementById("sidebar"),
+  sidebarToggle: document.getElementById("sidebar-toggle"),
+  sidebarOverlay: document.getElementById("sidebar-overlay"),
+  breadcrumbGroup: document.getElementById("breadcrumb-group"),
+  breadcrumbPage: document.getElementById("breadcrumb-page"),
+  userAvatar: document.getElementById("user-avatar"),
+  userName: document.getElementById("user-name"),
+  userChipTrigger: document.getElementById("user-chip-trigger"),
+  userDropdown: document.getElementById("user-dropdown"),
+  navAccount: document.getElementById("nav-account"),
 };
 
 let isRegisterMode = false;
@@ -71,6 +81,21 @@ function showLoginError(message) {
   elements.loginError.textContent = message;
 }
 
+/** Update breadcrumb from the active nav item. */
+function updateBreadcrumb(viewId) {
+  const navItem = elements.navItems.find((item) => item.dataset.view === viewId);
+  const group = navItem?.dataset.group || "Overview";
+  const page = navItem?.textContent.trim() || viewId;
+  elements.breadcrumbGroup.textContent = group;
+  elements.breadcrumbPage.textContent = page;
+}
+
+/** Close sidebar on mobile. */
+function closeSidebar() {
+  elements.sidebar.classList.remove("open");
+  elements.sidebarOverlay.classList.remove("show");
+}
+
 async function mountView(viewId) {
   const nextView = getView(viewId);
   state.activeView = nextView.id;
@@ -87,12 +112,16 @@ async function mountView(viewId) {
     ? `${nextView.subtitle} — Workspace: ${wsNet.name}`
     : nextView.subtitle;
 
+  updateBreadcrumb(nextView.id);
+
   if (typeof state.activeCleanup === "function") {
     state.activeCleanup();
     state.activeCleanup = null;
   }
 
-  elements.viewRoot.innerHTML = `<section class="panel"><span class="dim">Loading ${nextView.title}...</span></section>`;
+  // Add view-enter animation
+  elements.viewRoot.className = "view-root";
+  elements.viewRoot.innerHTML = `<section class="panel"><span class="dim"><span class="spinner"></span> Loading ${nextView.title}...</span></section>`;
 
   try {
     const cleanup = await nextView.mount(elements.viewRoot, {
@@ -102,6 +131,7 @@ async function mountView(viewId) {
       refreshWorkspaces: refreshWorkspaceDropdown,
     });
     state.activeCleanup = typeof cleanup === "function" ? cleanup : null;
+    elements.viewRoot.classList.add("view-enter");
   } catch (error) {
     elements.viewRoot.innerHTML = `
       <section class="panel">
@@ -113,28 +143,38 @@ async function mountView(viewId) {
       mountView(viewId);
     });
   }
+
+  // Close sidebar on mobile after navigation
+  closeSidebar();
 }
 
 async function bootstrapApp() {
   const me = await apis.auth.me();
   state.user = me;
 
-  // Show quota in user chip
-  const quota = me.quota_instances || 0;
-  elements.userChip.innerHTML = `${me.username}${me.is_admin ? " (admin)" : ""} <span class="dim" style="font-size:11px;" title="Instance quota">[quota: ${quota}]</span>`;
+  // Update user chip
+  const initials = (me.username || "?").slice(0, 2).toUpperCase();
+  elements.userAvatar.textContent = initials;
+  elements.userName.textContent = me.username + (me.is_admin ? " (admin)" : "");
 
   // Admin-only nav/buttons
   const accountNav = elements.navItems.find((item) => item.dataset.view === "admin");
   if (accountNav) {
-    // Always visible — shows Account for all users, Admin panel for admins
-    accountNav.textContent = me.is_admin ? "Admin" : "Account";
+    const label = accountNav.querySelector(".nav-icon");
+    const text = me.is_admin ? "Admin" : "Account";
+    // Replace text node only, keep icon
+    accountNav.childNodes.forEach((node) => {
+      if (node.nodeType === Node.TEXT_NODE && node.textContent.trim()) {
+        node.textContent = "\n              " + text + "\n            ";
+      }
+    });
   }
+
   const monitoringNav = elements.navItems.find((item) => item.dataset.view === "monitoring");
   if (monitoringNav) {
     monitoringNav.classList.toggle("hidden", !me.is_admin);
   }
   elements.monitorBtn.classList.toggle("hidden", !me.is_admin);
-  // MinIO console only for admins (regular users use presigned URLs via Storage view)
   elements.storageBtn.classList.toggle("hidden", !me.is_admin);
 
   // Load networks for workspace dropdown
@@ -161,8 +201,10 @@ function logout() {
   state.networks = [];
   apis.auth.clear();
   setLoggedOutUI();
+  closeUserDropdown();
 }
 
+// ── Login/Register Toggle ──────────────────────────────────────
 elements.toggleRegister.addEventListener("click", (event) => {
   event.preventDefault();
   isRegisterMode = !isRegisterMode;
@@ -173,7 +215,7 @@ elements.toggleRegister.addEventListener("click", (event) => {
     elements.registerFields.classList.remove("hidden");
     elements.loginEmail.required = true;
   } else {
-    elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, dan storage.";
+    elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, database, dan storage.";
     elements.loginSubmit.textContent = "Masuk";
     elements.toggleRegister.textContent = "Belum punya akun? Daftar";
     elements.registerFields.classList.add("hidden");
@@ -182,6 +224,7 @@ elements.toggleRegister.addEventListener("click", (event) => {
   elements.loginError.className = "message error hidden";
 });
 
+// ── Login Submit ───────────────────────────────────────────────
 elements.loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const form = new FormData(elements.loginForm);
@@ -203,11 +246,10 @@ elements.loginForm.addEventListener("submit", async (event) => {
         return;
       }
       await apis.auth.register({ username, email, password });
-      // Auto-login after registration
       await apis.auth.login(username, password);
       isRegisterMode = false;
       elements.registerFields.classList.add("hidden");
-      elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, dan storage.";
+      elements.loginModeText.textContent = "Masuk untuk mengelola compute, network, database, dan storage.";
       elements.loginSubmit.textContent = "Masuk";
       elements.toggleRegister.textContent = "Belum punya akun? Daftar";
       await bootstrapApp();
@@ -223,11 +265,13 @@ elements.loginForm.addEventListener("submit", async (event) => {
   }
 });
 
+// ── Logout ─────────────────────────────────────────────────────
 elements.logoutBtn.addEventListener("click", () => {
   logout();
   toast("Sesi logout berhasil.");
 });
 
+// ── Navigation ─────────────────────────────────────────────────
 elements.navItems.forEach((item) => {
   item.addEventListener("click", () => {
     mountView(item.dataset.view);
@@ -240,7 +284,7 @@ elements.refreshViewBtn.addEventListener("click", () => {
   });
 });
 
-// Workspace selector
+// ── Workspace selector ─────────────────────────────────────────
 elements.workspaceSelect.addEventListener("change", () => {
   state.activeWorkspace = elements.workspaceSelect.value || null;
   mountView(state.activeView).catch((error) => {
@@ -248,16 +292,55 @@ elements.workspaceSelect.addEventListener("change", () => {
   });
 });
 
+// ── External links ─────────────────────────────────────────────
 elements.monitorBtn.addEventListener("click", () => {
   window.open("/monitor/", "_blank", "noopener");
+  closeUserDropdown();
 });
 elements.storageBtn.addEventListener("click", () => {
   window.open("/storage-console/", "_blank", "noopener");
+  closeUserDropdown();
 });
 elements.docsBtn.addEventListener("click", () => {
   window.open("/api/docs", "_blank", "noopener");
+  closeUserDropdown();
 });
 
+// ── Account nav from dropdown ──────────────────────────────────
+elements.navAccount?.addEventListener("click", () => {
+  mountView("admin");
+  closeUserDropdown();
+});
+
+// ── Sidebar toggle (mobile) ───────────────────────────────────
+elements.sidebarToggle?.addEventListener("click", () => {
+  elements.sidebar.classList.toggle("open");
+  elements.sidebarOverlay.classList.toggle("show");
+});
+
+elements.sidebarOverlay?.addEventListener("click", () => {
+  closeSidebar();
+});
+
+// ── User dropdown toggle ──────────────────────────────────────
+function closeUserDropdown() {
+  elements.userDropdown.classList.add("hidden");
+}
+
+elements.userChipTrigger?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  elements.userDropdown.classList.toggle("hidden");
+});
+
+document.addEventListener("click", (event) => {
+  if (!elements.userDropdown.classList.contains("hidden")) {
+    if (!event.target.closest("#user-menu")) {
+      closeUserDropdown();
+    }
+  }
+});
+
+// ── Init ───────────────────────────────────────────────────────
 async function init() {
   setLoggedOutUI();
   if (!apis.auth.hasToken()) return;

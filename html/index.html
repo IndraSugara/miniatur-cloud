@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Miniatur Cloud — Mini IaaS platform for managing compute instances, networks, and storage." />
+    <meta name="description" content="Miniatur Cloud — Mini IaaS platform for managing compute instances, databases, networks, and storage." />
     <title>Miniatur Cloud Console</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="stylesheet" href="/assets/css/app.css" />
@@ -13,85 +13,177 @@
     <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
   </head>
   <body>
+    <!-- ═══════════════════════════════════════════════════════════
+         LOGIN SCREEN
+         ═══════════════════════════════════════════════════════════ -->
     <div id="login-screen" class="login-screen">
       <div class="login-card">
-        <h1 class="login-title">Miniatur Cloud</h1>
-        <p id="login-mode-text" class="login-subtitle">Masuk untuk mengelola compute, network, dan storage.</p>
+        <div class="login-logo">
+          <div class="logo-mark">MC</div>
+          <h1 class="login-title">Miniatur Cloud</h1>
+        </div>
+        <p id="login-mode-text" class="login-subtitle">Masuk untuk mengelola compute, network, database, dan storage.</p>
         <form id="login-form" class="stack-md">
-          <label class="field-label" for="login-username">Username</label>
-          <input id="login-username" name="username" type="text" autocomplete="username" required />
+          <div>
+            <label class="field-label" for="login-username">Username</label>
+            <input id="login-username" name="username" type="text" autocomplete="username" required placeholder="Enter username" />
+          </div>
 
-          <label class="field-label" for="login-password">Password</label>
-          <input
-            id="login-password"
-            name="password"
-            type="password"
-            autocomplete="current-password"
-            required
-          />
+          <div>
+            <label class="field-label" for="login-password">Password</label>
+            <input id="login-password" name="password" type="password" autocomplete="current-password" required placeholder="Enter password" />
+          </div>
 
           <div id="register-fields" class="hidden">
             <label class="field-label" for="login-email">Email</label>
-            <input id="login-email" name="email" type="email" autocomplete="email" />
+            <input id="login-email" name="email" type="email" autocomplete="email" placeholder="you@example.com" />
           </div>
 
-          <button id="login-submit" type="submit" class="btn btn-primary btn-block">Masuk</button>
+          <button id="login-submit" type="submit" class="btn btn-primary btn-block" style="margin-top:4px;">Masuk</button>
         </form>
         <p id="login-error" class="message error hidden"></p>
-        <p style="text-align:center;margin-top:12px;font-size:13px;">
-          <a id="toggle-register" href="#" style="color:var(--primary);">Belum punya akun? Daftar</a>
+        <p style="text-align:center;margin-top:14px;font-size:13px;">
+          <a id="toggle-register" href="#" style="color:var(--accent);text-decoration:none;font-weight:500;">Belum punya akun? Daftar</a>
         </p>
       </div>
     </div>
 
+    <!-- ═══════════════════════════════════════════════════════════
+         APP SHELL
+         ═══════════════════════════════════════════════════════════ -->
     <div id="app-shell" class="app-shell hidden">
-      <header class="topbar">
-        <div class="brand">
+      <!-- Sidebar Overlay (mobile) -->
+      <div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+      <!-- ── Sidebar ─────────────────────────────────────────── -->
+      <aside id="sidebar" class="sidebar">
+        <div class="sidebar-brand">
           <span class="brand-mark">MC</span>
-          <div>
-            <div class="brand-title">Miniatur Cloud Console</div>
-            <div class="brand-sub">Jetson Nano IaaS</div>
+          <div class="brand-text">
+            <div class="brand-title">Miniatur Cloud</div>
+            <div class="brand-sub">IaaS Console</div>
+          </div>
+        </div>
+
+        <div class="sidebar-workspace">
+          <label class="field-label" for="workspace-select">Workspace</label>
+          <select id="workspace-select">
+            <option value="">All Resources</option>
+          </select>
+        </div>
+
+        <nav class="sidebar-nav">
+          <!-- Overview -->
+          <div class="nav-group">
+            <div class="nav-group-label">Overview</div>
+            <button class="nav-item active" data-view="dashboard" data-group="Overview">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></span>
+              Dashboard
+            </button>
+          </div>
+
+          <!-- Compute -->
+          <div class="nav-group">
+            <div class="nav-group-label">Compute</div>
+            <button class="nav-item" data-view="compute" data-group="Compute">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><line x1="6" y1="10" x2="6" y2="14"/><line x1="10" y1="10" x2="10" y2="14"/><line x1="14" y1="10" x2="14" y2="14"/></svg></span>
+              Instances
+            </button>
+            <button class="nav-item" data-view="catalog" data-group="Compute">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg></span>
+              Catalog
+            </button>
+          </div>
+
+          <!-- Database -->
+          <div class="nav-group">
+            <div class="nav-group-label">Database</div>
+            <button class="nav-item" data-view="database" data-group="Database">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg></span>
+              RDS Instances
+            </button>
+          </div>
+
+          <!-- Networking -->
+          <div class="nav-group">
+            <div class="nav-group-label">Networking</div>
+            <button class="nav-item" data-view="network" data-group="Networking">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="22" height="18" rx="2"/><line x1="1" y1="9" x2="23" y2="9"/><line x1="1" y1="15" x2="23" y2="15"/><line x1="8" y1="3" x2="8" y2="21"/><line x1="16" y1="3" x2="16" y2="21"/></svg></span>
+              VPC & Security
+            </button>
+          </div>
+
+          <!-- Storage -->
+          <div class="nav-group">
+            <div class="nav-group-label">Storage</div>
+            <button class="nav-item" data-view="storage" data-group="Storage">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+              Volumes & S3
+            </button>
+          </div>
+
+          <!-- Management -->
+          <div class="nav-group">
+            <div class="nav-group-label">Management</div>
+            <button class="nav-item" data-view="monitoring" data-group="Management">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></span>
+              Monitoring
+            </button>
+            <button class="nav-item" data-view="admin" data-group="Management">
+              <span class="nav-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+              Admin
+            </button>
+          </div>
+        </nav>
+
+        <div class="sidebar-footer">
+          <div class="sidebar-version">Miniatur Cloud v1.1.0</div>
+        </div>
+      </aside>
+
+      <!-- ── Top Bar ─────────────────────────────────────────── -->
+      <header class="topbar">
+        <div class="topbar-left">
+          <button id="sidebar-toggle" class="sidebar-toggle" title="Toggle sidebar">☰</button>
+          <div class="breadcrumb">
+            <span id="breadcrumb-group" class="breadcrumb-service">Overview</span>
+            <span class="breadcrumb-sep">›</span>
+            <span id="breadcrumb-page" class="breadcrumb-page">Dashboard</span>
           </div>
         </div>
 
         <div class="topbar-actions">
-          <div class="workspace-selector">
-            <label class="field-label" for="workspace-select" style="margin:0;white-space:nowrap;">Workspace</label>
-            <select id="workspace-select">
-              <option value="">All Resources</option>
-            </select>
+          <button id="refresh-view" class="btn btn-ghost btn-inline" title="Refresh view">↻ Refresh</button>
+
+          <div class="user-menu" id="user-menu">
+            <div class="user-chip" id="user-chip-trigger">
+              <span class="user-avatar" id="user-avatar">?</span>
+              <span id="user-name">-</span>
+              <span style="font-size:10px;opacity:0.5;">▾</span>
+            </div>
+            <div class="user-dropdown hidden" id="user-dropdown">
+              <button class="dropdown-item" id="open-docs">📄 API Docs</button>
+              <button class="dropdown-item" id="open-monitor">📊 Grafana</button>
+              <button class="dropdown-item" id="open-storage-console">📦 MinIO Console</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item" id="nav-account">👤 Account</button>
+              <div class="dropdown-divider"></div>
+              <button class="dropdown-item danger" id="logout-btn">Logout</button>
+            </div>
           </div>
-          <button id="open-docs" class="btn btn-ghost">API Docs</button>
-          <button id="open-monitor" class="btn btn-ghost">Grafana</button>
-          <button id="open-storage-console" class="btn btn-ghost">MinIO</button>
-          <div id="user-chip" class="user-chip">-</div>
-          <button id="logout-btn" class="btn btn-danger">Logout</button>
         </div>
       </header>
 
-      <div class="workspace">
-        <aside class="sidebar">
-          <button class="nav-item active" data-view="dashboard">Dashboard</button>
-          <button class="nav-item" data-view="compute">Compute</button>
-          <button class="nav-item" data-view="database">Database</button>
-          <button class="nav-item" data-view="network">Network</button>
-          <button class="nav-item" data-view="storage">Storage</button>
-          <button class="nav-item" data-view="catalog">Catalog</button>
-          <button class="nav-item" data-view="monitoring">Monitoring</button>
-          <button class="nav-item" data-view="admin">Admin</button>
-        </aside>
-
-        <main class="content">
-          <div class="content-header">
-            <div>
-              <h2 id="view-title">Dashboard</h2>
-              <p id="view-subtitle">Ringkasan sumber daya cloud miniatur.</p>
-            </div>
-            <button id="refresh-view" class="btn btn-ghost">Refresh</button>
+      <!-- ── Content ─────────────────────────────────────────── -->
+      <main class="content-area">
+        <div class="content-header">
+          <div>
+            <h2 id="view-title">Dashboard</h2>
+            <p id="view-subtitle">Ringkasan sumber daya cloud miniatur.</p>
           </div>
-          <section id="view-root" class="view-root"></section>
-        </main>
-      </div>
+        </div>
+        <section id="view-root" class="view-root"></section>
+      </main>
     </div>
 
     <div id="modal-root"></div>

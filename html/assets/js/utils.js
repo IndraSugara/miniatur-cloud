@@ -18,9 +18,10 @@ export function clampPercent(value) {
 
 export function statusClass(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "available") return "running";
-  if (normalized === "attached") return "pending";
-  if (["running", "pending", "stopped", "terminated", "error"].includes(normalized)) {
+  if ([
+    "running", "pending", "stopped", "terminated", "error",
+    "creating", "deleting", "available", "attached",
+  ].includes(normalized)) {
     return normalized;
   }
   return "stopped";

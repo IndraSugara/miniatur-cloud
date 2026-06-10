@@ -21,9 +21,12 @@ export function toast(message, type = "ok") {
   node.className = `toast ${type}`;
   node.textContent = message;
   root.appendChild(node);
-  const duration = type === "error" ? 5000 : 2000;
+  const duration = type === "error" ? 5000 : 2500;
   window.setTimeout(() => {
-    node.remove();
+    node.style.opacity = "0";
+    node.style.transform = "translateX(20px)";
+    node.style.transition = "all 0.3s ease";
+    window.setTimeout(() => node.remove(), 300);
   }, duration);
 }
 
@@ -35,27 +38,37 @@ export function showModal({ title, bodyHtml, actions = [] }) {
     <div class="modal">
       <div class="modal-head">
         <strong>${esc(title)}</strong>
-        <button class="btn btn-inline btn-ghost" data-close>Close</button>
+        <button class="btn btn-inline btn-ghost" data-close>✕</button>
       </div>
       <div class="modal-body">${bodyHtml}</div>
       <div class="modal-foot"></div>
     </div>
   `;
 
-  const close = () => wrapper.remove();
+  const close = () => {
+    wrapper.style.opacity = "0";
+    wrapper.querySelector(".modal").style.transform = "scale(0.96) translateY(8px)";
+    wrapper.querySelector(".modal").style.transition = "transform 0.15s ease";
+    wrapper.style.transition = "opacity 0.15s ease";
+    window.setTimeout(() => wrapper.remove(), 150);
+  };
   wrapper.addEventListener("click", (event) => {
     if (event.target === wrapper) close();
   });
   wrapper.querySelector("[data-close]").addEventListener("click", close);
 
   const footer = wrapper.querySelector(".modal-foot");
-  actions.forEach((action) => {
-    const button = document.createElement("button");
-    button.className = action.className || "btn";
-    button.textContent = action.label;
-    button.addEventListener("click", () => action.onClick({ close, wrapper, button }));
-    footer.appendChild(button);
-  });
+  if (actions.length === 0) {
+    footer.remove();
+  } else {
+    actions.forEach((action) => {
+      const button = document.createElement("button");
+      button.className = action.className || "btn";
+      button.textContent = action.label;
+      button.addEventListener("click", () => action.onClick({ close, wrapper, button }));
+      footer.appendChild(button);
+    });
+  }
 
   root.appendChild(wrapper);
   return { close, wrapper };

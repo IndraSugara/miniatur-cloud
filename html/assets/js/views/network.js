@@ -8,14 +8,16 @@ function errMsg(error) {
 
 export const networkView = {
   id: "network",
-  title: "Network",
+  title: "VPC & Security",
   subtitle: "Kelola network, security group, dan public endpoint.",
   async mount(root, { apis, navigate, state }) {
     const activeWs = state.activeWorkspace;
     root.innerHTML = `
       <section class="panel">
-        <h3>Create Network</h3>
-        <form id="network-form" class="grid grid-3">
+        <div class="panel-header">
+          <h3>Create Network</h3>
+        </div>
+        <form id="network-form" class="grid grid-3" style="margin-bottom:0;">
           <div>
             <label class="field-label" for="network-name">Name</label>
             <input id="network-name" required placeholder="my-net" />
@@ -35,39 +37,45 @@ export const networkView = {
       </section>
 
       <section class="panel">
-        <h3>Networks</h3>
+        <div class="panel-header">
+          <h3>Networks</h3>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr><th>Name</th><th>CIDR</th><th>Gateway</th><th>Default</th><th>Workspace</th><th>Action</th></tr>
             </thead>
             <tbody id="network-body">
-              <tr><td colspan="5" class="dim"><span class="spinner"></span> Memuat...</td></tr>
+              <tr><td colspan="6" class="dim"><span class="spinner"></span> Memuat...</td></tr>
             </tbody>
           </table>
         </div>
       </section>
 
       <section class="panel">
-        <h3>Security Groups</h3>
-        <form id="sg-create-form" class="toolbar" style="margin-bottom:12px;">
-          <input id="sg-name" placeholder="Nama SG baru" required />
-          <button class="btn btn-primary" type="submit">Create</button>
-        </form>
+        <div class="panel-header">
+          <h3>Security Groups</h3>
+          <form id="sg-create-form" class="toolbar">
+            <input id="sg-name" placeholder="Nama SG baru" required style="width:180px;" />
+            <button class="btn btn-primary btn-inline" type="submit">Create</button>
+          </form>
+        </div>
         <div id="sg-list"></div>
       </section>
 
       <section class="panel">
-        <h3>Public Endpoints</h3>
-        <p class="dim" style="margin-bottom:8px;font-size:0.85rem;">
+        <div class="panel-header">
+          <h3>Public Endpoints</h3>
+          <form id="ep-create-form" class="toolbar">
+            <select id="ep-instance-select" style="width:180px;">
+              <option value="">Allocate only</option>
+            </select>
+            <button class="btn btn-primary btn-inline" type="submit">Allocate</button>
+          </form>
+        </div>
+        <p class="muted" style="margin-bottom:8px;font-size:12px;">
           Port forwards from host IP to container SSH port.
         </p>
-        <form id="ep-create-form" class="toolbar" style="margin-bottom:12px;">
-          <select id="ep-instance-select">
-            <option value="">Allocate only</option>
-          </select>
-          <button class="btn btn-primary" type="submit">Allocate Endpoint</button>
-        </form>
         <div class="table-wrap">
           <table>
             <thead>
@@ -99,13 +107,13 @@ export const networkView = {
       networkBody.innerHTML = networks
         .map(
           (n) => `
-            <tr${activeWs === n.id ? ' style="background:rgba(56,189,248,0.06);"' : ""}>
+            <tr${activeWs === n.id ? ' style="background:var(--accent-dim);"' : ""}>
               <td><strong>${escapeHtml(n.name)}</strong>${activeWs === n.id ? ' <span class="badge badge-blue" style="font-size:10px;">active</span>' : ""}</td>
               <td class="mono">${escapeHtml(n.cidr || "-")}</td>
               <td class="mono">${escapeHtml(n.gateway || "-")}</td>
-              <td>${n.is_default ? "Yes" : ""}</td>
+              <td>${n.is_default ? '<span class="badge badge-dim">default</span>' : ""}</td>
               <td>
-                ${!n.is_default ? `<button class="btn btn-inline" data-ws-select="${n.id}">🔍 Focus</button>` : '<span class="dim">—</span>'}
+                ${!n.is_default ? `<button class="btn btn-inline btn-ghost" data-ws-select="${n.id}">🔍 Focus</button>` : '<span class="dim">—</span>'}
               </td>
               <td>${
                 n.is_default
@@ -134,18 +142,18 @@ export const networkView = {
                   <td class="mono">${r.port_min}-${r.port_max}</td>
                   <td class="mono">${escapeHtml(r.cidr)}</td>
                   <td>
-                    ${sg.is_default ? "" : `<button class="btn btn-inline btn-danger" data-rule-delete="${sg.id}|${r.id}" style="font-size:0.75rem;">x</button>`}
+                    ${sg.is_default ? "" : `<button class="btn btn-xs btn-danger" data-rule-delete="${sg.id}|${r.id}">✕</button>`}
                   </td>
                 </tr>
               `,
             )
             .join("");
           return `
-            <div class="panel" style="margin-bottom:8px;padding:10px;">
+            <div style="margin-bottom:8px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg-surface);">
               <div class="toolbar" style="justify-content:space-between;">
-                <strong>${escapeHtml(sg.name)}${sg.is_default ? " [default]" : ""}</strong>
+                <strong>${escapeHtml(sg.name)}${sg.is_default ? ' <span class="badge badge-dim" style="font-size:10px;">default</span>' : ""}</strong>
                 <div class="actions">
-                  <button class="btn btn-inline" data-rule-add="${sg.id}">Add Rule</button>
+                  <button class="btn btn-inline" data-rule-add="${sg.id}">+ Rule</button>
                   ${sg.is_default ? "" : `<button class="btn btn-inline btn-danger" data-sg-delete="${sg.id}">Delete</button>`}
                 </div>
               </div>
@@ -420,8 +428,10 @@ export const networkView = {
         const modal = showModal({
           title: "Attach Public Endpoint",
           bodyHtml: `
-            <label class="field-label" for="ep-target">Pilih Instance</label>
-            <select id="ep-target">${optionsHtml}</select>
+            <div>
+              <label class="field-label" for="ep-target">Pilih Instance</label>
+              <select id="ep-target">${optionsHtml}</select>
+            </div>
           `,
           actions: [
             {

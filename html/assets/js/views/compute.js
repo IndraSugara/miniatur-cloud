@@ -15,60 +15,65 @@ function renderTags(tags) {
 
 export const computeView = {
   id: "compute",
-  title: "Compute",
+  title: "Instances",
   subtitle: "Kelola instance, tindakan lifecycle, SSH, exec, logs, dan snapshot.",
   async mount(root, { apis, navigate, state }) {
     const activeWs = state.activeWorkspace;
     root.innerHTML = `
       <section class="panel">
-        <h3>Create Instance</h3>
-        <form id="create-instance-form" class="grid grid-3">
-          <div>
-            <label class="field-label" for="inst-name">Name</label>
-            <input id="inst-name" required placeholder="web-01" />
+        <div class="panel-header">
+          <h3>Launch Instance</h3>
+        </div>
+        <form id="create-instance-form" class="stack-md">
+          <div class="grid grid-3">
+            <div>
+              <label class="field-label" for="inst-name">Name</label>
+              <input id="inst-name" required placeholder="web-01" />
+            </div>
+            <div>
+              <label class="field-label" for="inst-image">Image</label>
+              <select id="inst-image"></select>
+            </div>
+            <div>
+              <label class="field-label" for="inst-type">Instance Type</label>
+              <select id="inst-type"></select>
+            </div>
+          </div>
+          <div class="grid grid-3">
+            <div>
+              <label class="field-label" for="inst-network">Network</label>
+              <select id="inst-network">
+                <option value="">Default</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="inst-sg">Security Group</label>
+              <select id="inst-sg">
+                <option value="">Default</option>
+              </select>
+            </div>
+            <div>
+              <label class="field-label" for="inst-ep">Public Endpoint</label>
+              <select id="inst-ep">
+                <option value="">Auto SSH Port</option>
+              </select>
+            </div>
           </div>
           <div>
-            <label class="field-label" for="inst-image">Image</label>
-            <select id="inst-image"></select>
-          </div>
-          <div>
-            <label class="field-label" for="inst-type">Instance Type</label>
-            <select id="inst-type"></select>
-          </div>
-          <div>
-            <label class="field-label" for="inst-network">Network</label>
-            <select id="inst-network">
-              <option value="">Default</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="inst-sg">Security Group</label>
-            <select id="inst-sg">
-              <option value="">Default</option>
-            </select>
-          </div>
-          <div>
-            <label class="field-label" for="inst-ep">Public Endpoint (optional)</label>
-            <select id="inst-ep">
-              <option value="">Auto SSH Port</option>
-            </select>
-          </div>
-          <div style="grid-column:1/-1;">
-            <label class="field-label" for="inst-tags">Tags <span class="dim">(key=value, comma separated)</span></label>
+            <label class="field-label" for="inst-tags">Tags <span class="muted">(key=value, comma separated)</span></label>
             <input id="inst-tags" placeholder="env=dev, project=demo" />
           </div>
-          <div style="grid-column:1/-1;" class="toolbar">
-            <button id="create-instance-btn" class="btn btn-primary" type="submit">Create Instance</button>
-            <span class="dim">Tip: pilih network/security-group di awal untuk kolaborasi compute-network.</span>
+          <div class="toolbar">
+            <button id="create-instance-btn" class="btn btn-primary" type="submit">🚀 Launch Instance</button>
           </div>
         </form>
         <p id="create-instance-message" class="message hidden"></p>
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
+        <div class="panel-header">
           <h3>Instances</h3>
-          <button id="reload-instances" class="btn btn-inline btn-ghost">Reload</button>
+          <button id="reload-instances" class="btn btn-inline btn-ghost">↻ Reload</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -93,9 +98,9 @@ export const computeView = {
       </section>
 
       <section class="panel">
-        <div class="toolbar" style="justify-content:space-between;">
+        <div class="panel-header">
           <h3>Snapshots</h3>
-          <button id="reload-snapshots" class="btn btn-inline btn-ghost">Reload</button>
+          <button id="reload-snapshots" class="btn btn-inline btn-ghost">↻ Reload</button>
         </div>
         <div class="table-wrap">
           <table>
@@ -210,10 +215,10 @@ export const computeView = {
     function renderStatusBadge(item) {
       let badge = `<span class="status ${statusClass(item.status)}">${item.status}</span>`;
       if (item.status_detail && item.status !== "running" && item.status !== "terminated") {
-        badge += `<div class="dim" style="font-size:0.75rem;margin-top:2px;">${escapeHtml(item.status_detail)}</div>`;
+        badge += `<div class="muted" style="font-size:0.75rem;margin-top:2px;">${escapeHtml(item.status_detail)}</div>`;
       }
       if (item.status === "error" && item.error_message) {
-        badge += `<div class="dim" style="font-size:0.7rem;color:var(--error);margin-top:2px;" title="${escapeHtml(item.error_message)}">${escapeHtml(item.error_message.slice(0, 40))}${item.error_message.length > 40 ? "…" : ""}</div>`;
+        badge += `<div class="muted" style="font-size:0.7rem;color:var(--danger);margin-top:2px;" title="${escapeHtml(item.error_message)}">${escapeHtml(item.error_message.slice(0, 40))}${item.error_message.length > 40 ? "…" : ""}</div>`;
       }
       return badge;
     }
@@ -231,17 +236,17 @@ export const computeView = {
         .map(
           (item) => `
             <tr>
-              <td>${escapeHtml(item.name)}</td>
+              <td><strong>${escapeHtml(item.name)}</strong></td>
               <td>${renderStatusBadge(item)}</td>
               <td>${escapeHtml(item.image)}</td>
               <td><span class="chip mono">${escapeHtml(item.instance_type)}</span></td>
               <td>${renderNetworkLink(item.network_id)}</td>
               <td>${item.public_url
-                ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono" style="color:var(--primary);font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
+                ? `<a href="${escapeHtml(item.public_url)}" target="_blank" class="mono resource-link" style="font-size:0.8rem;">${escapeHtml(item.public_hostname)}</a>`
                 : '<span class="dim">—</span>'
               }</td>
-              <td class="mono">${escapeHtml(item.public_endpoint || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
-              <td>${toLocalDate(item.created_at)}</td>
+              <td class="mono" style="font-size:12px;">${escapeHtml(item.public_endpoint || (item.ssh_port ? "port " + item.ssh_port : "-"))}</td>
+              <td class="muted">${toLocalDate(item.created_at)}</td>
               <td>
                 <div class="actions">
                   <button class="btn btn-inline" data-action="detail" data-id="${item.id}">Detail</button>
@@ -254,7 +259,7 @@ export const computeView = {
                   }
                   ${
                     item.status === "running" && !item.public_url
-                      ? `<button class="btn btn-inline" data-action="expose" data-id="${item.id}" style="color:var(--primary);">Expose</button>`
+                      ? `<button class="btn btn-inline btn-success" data-action="expose" data-id="${item.id}">Expose</button>`
                       : ""
                   }
                   ${
@@ -262,7 +267,7 @@ export const computeView = {
                       ? `<button class="btn btn-inline btn-danger" data-action="unexpose" data-id="${item.id}">Unexpose</button>`
                       : ""
                   }
-                  <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snapshot</button>
+                  <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snap</button>
                   ${
                     item.status === "running"
                       ? `<button class="btn btn-inline" data-action="stop" data-id="${item.id}">Stop</button>`
@@ -270,7 +275,7 @@ export const computeView = {
                   }
                   ${
                     item.status === "stopped"
-                      ? `<button class="btn btn-inline" data-action="start" data-id="${item.id}">Start</button>`
+                      ? `<button class="btn btn-inline btn-success" data-action="start" data-id="${item.id}">Start</button>`
                       : ""
                   }
                   ${
@@ -298,10 +303,10 @@ export const computeView = {
         .map(
           (item) => `
             <tr>
-              <td>${escapeHtml(item.name)}</td>
-              <td class="mono">${escapeHtml(item.source_instance_id)}</td>
-              <td class="mono">${escapeHtml(item.image_ref)}</td>
-              <td>${toLocalDate(item.created_at)}</td>
+              <td><strong>${escapeHtml(item.name)}</strong></td>
+              <td class="mono" style="font-size:12px;">${escapeHtml(item.source_instance_id)}</td>
+              <td class="mono" style="font-size:12px;">${escapeHtml(item.image_ref)}</td>
+              <td class="muted">${toLocalDate(item.created_at)}</td>
               <td>
                 <button class="btn btn-inline btn-danger" data-snap-delete="${item.id}">Delete</button>
               </td>
@@ -325,76 +330,76 @@ export const computeView = {
         apis.network.listSecurityGroups(),
       ]);
       const modal = showModal({
-        title: `Instance Detail — ${escapeHtml(detail.name)}`,
+        title: `Instance — ${escapeHtml(detail.name)}`,
         bodyHtml: `
           <div class="grid grid-2">
             <div>
-              <div class="dim">Status</div>
-              <div><span class="status ${statusClass(detail.status)}">${detail.status}</span></div>
-              ${detail.status_detail ? `<div class="dim" style="font-size:0.8rem;">${escapeHtml(detail.status_detail)}</div>` : ""}
-              ${detail.error_message ? `<div style="font-size:0.8rem;color:var(--error);">${escapeHtml(detail.error_message)}</div>` : ""}
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Status</div>
+              <div style="margin-top:4px;"><span class="status ${statusClass(detail.status)}">${detail.status}</span></div>
+              ${detail.status_detail ? `<div class="muted" style="font-size:0.8rem;">${escapeHtml(detail.status_detail)}</div>` : ""}
+              ${detail.error_message ? `<div style="font-size:0.8rem;color:var(--danger);">${escapeHtml(detail.error_message)}</div>` : ""}
             </div>
             <div>
-              <div class="dim">Type</div>
-              <div><span class="chip mono">${escapeHtml(detail.instance_type)}</span></div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Type</div>
+              <div style="margin-top:4px;"><span class="chip mono">${escapeHtml(detail.instance_type)}</span></div>
             </div>
             <div>
-              <div class="dim">IP Address</div>
-              <div class="mono">${escapeHtml(detail.ip_address || "-")}</div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">IP Address</div>
+              <div class="mono" style="margin-top:4px;">${escapeHtml(detail.ip_address || "-")}</div>
             </div>
             <div>
-              <div class="dim">SSH Command</div>
-              <div class="mono">${escapeHtml(detail.ssh_command || "-")}</div>
-              ${detail.ssh_command_direct ? `<div class="dim" style="font-size:0.7rem;margin-top:4px;">Direct: ${escapeHtml(detail.ssh_command_direct)}</div>` : ""}
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">SSH Command</div>
+              <div class="mono" style="margin-top:4px;font-size:12px;">${escapeHtml(detail.ssh_command || "-")}</div>
+              ${detail.ssh_command_direct ? `<div class="muted" style="font-size:0.7rem;margin-top:4px;">Direct: ${escapeHtml(detail.ssh_command_direct)}</div>` : ""}
             </div>
             <div>
-              <div class="dim">SSH Password</div>
-              <div class="mono">${escapeHtml(detail.ssh_password || "-")}</div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">SSH Password</div>
+              <div class="mono" style="margin-top:4px;">${escapeHtml(detail.ssh_password || "-")}</div>
             </div>
             <div>
-              <div class="dim">Public Endpoint</div>
-              <div class="mono">${escapeHtml(detail.public_endpoint || "-")}</div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Public Endpoint</div>
+              <div class="mono" style="margin-top:4px;">${escapeHtml(detail.public_endpoint || "-")}</div>
             </div>
             <div>
-              <div class="dim">vCPU / RAM</div>
-              <div class="mono">${detail.vcpu || "-"} vCPU / ${detail.memory_mb || "-"} MB</div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">vCPU / RAM</div>
+              <div class="mono" style="margin-top:4px;">${detail.vcpu || "-"} vCPU / ${detail.memory_mb || "-"} MB</div>
             </div>
             <div>
-              <div class="dim">Tags</div>
-              <div>${renderTags(detail.tags)}</div>
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Tags</div>
+              <div style="margin-top:4px;">${renderTags(detail.tags)}</div>
             </div>
             <div style="grid-column:1/-1;">
-              <div class="dim">Public URL</div>
-              <div>${detail.public_url
-                ? `<a href="${escapeHtml(detail.public_url)}" target="_blank" style="color:var(--primary);">${escapeHtml(detail.public_url)}</a> <span class="dim">(port ${detail.expose_port})</span>`
+              <div class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Public URL</div>
+              <div style="margin-top:4px;">${detail.public_url
+                ? `<a href="${escapeHtml(detail.public_url)}" target="_blank" class="resource-link">${escapeHtml(detail.public_url)}</a> <span class="muted">(port ${detail.expose_port})</span>`
                 : '<span class="dim">Not exposed</span>'
               }</div>
             </div>
           </div>
-          <div style="margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:6px;">
-            <div class="dim" style="margin-bottom:8px;">Expose App to Internet</div>
+          <div style="margin-top:14px;padding:12px;border:1px solid var(--border);border-radius:var(--radius-sm);">
+            <div class="muted" style="margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Expose App to Internet</div>
             ${detail.public_url ? `
               <div style="display:flex;align-items:center;gap:8px;">
-                <span class="mono" style="font-size:0.85rem;">🌐 <a href="${escapeHtml(detail.public_url)}" target="_blank" style="color:var(--primary);">${escapeHtml(detail.public_hostname)}</a></span>
-                <span class="dim">→ port ${detail.expose_port}</span>
+                <span class="mono" style="font-size:0.85rem;">🌐 <a href="${escapeHtml(detail.public_url)}" target="_blank" class="resource-link">${escapeHtml(detail.public_hostname)}</a></span>
+                <span class="muted">→ port ${detail.expose_port}</span>
                 <button id="modal-unexpose" class="btn btn-inline btn-danger">Unexpose</button>
               </div>
             ` : `
               <div class="grid grid-2" style="gap:8px;align-items:end;">
                 <div>
-                  <label class="field-label" style="font-size:0.75rem;">App Port (e.g. 3000, 8080)</label>
-                  <input id="modal-expose-port" type="number" min="1" max="65535" value="8080" style="width:100%;" />
+                  <label class="field-label" style="font-size:10px;">App Port (e.g. 3000, 8080)</label>
+                  <input id="modal-expose-port" type="number" min="1" max="65535" value="8080" />
                 </div>
                 <div>
-                  <button id="modal-expose-btn" class="btn btn-primary" style="width:100%;">Expose to Internet</button>
+                  <button id="modal-expose-btn" class="btn btn-primary" style="width:100%;">Expose</button>
                 </div>
               </div>
             `}
           </div>
-          <div id="instance-metrics" style="margin-top:12px;">
+          <div id="instance-metrics" style="margin-top:14px;">
             <div class="dim"><span class="spinner"></span> Memuat metrics…</div>
           </div>
-          <hr style="border-color:var(--line);margin:14px 0;" />
+          <hr style="border-color:var(--border-subtle);margin:16px 0;" />
           <div class="grid grid-2">
             <div>
               <label class="field-label">Ubah Network</label>
@@ -404,7 +409,7 @@ export const computeView = {
                 (item) => item.id,
                 detail.network_id,
               )}</select>
-              <button id="modal-apply-network" class="btn btn-inline" style="margin-top:8px;">Apply Network</button>
+              <button id="modal-apply-network" class="btn btn-inline" style="margin-top:8px;">Apply</button>
             </div>
             <div>
               <label class="field-label">Ubah Security Group</label>
@@ -414,12 +419,12 @@ export const computeView = {
                 (item) => item.id,
                 detail.security_group_id,
               )}</select>
-              <button id="modal-apply-sg" class="btn btn-inline" style="margin-top:8px;">Apply Security Group</button>
+              <button id="modal-apply-sg" class="btn btn-inline" style="margin-top:8px;">Apply</button>
             </div>
           </div>
-          <hr style="border-color:var(--line);margin:14px 0;" />
+          <hr style="border-color:var(--border-subtle);margin:16px 0;" />
           <div>
-            <label class="field-label">Edit Tags <span class="dim">(key=value, comma separated)</span></label>
+            <label class="field-label">Edit Tags <span class="muted">(key=value, comma separated)</span></label>
             <input id="modal-tags-input" value="${escapeHtml(
               detail.tags ? Object.entries(detail.tags).map(([k, v]) => `${k}=${v}`).join(", ") : ""
             )}" />
@@ -445,28 +450,24 @@ export const computeView = {
           const memPct = (stats.mem_usage_mb && stats.mem_limit_mb)
             ? ((stats.mem_usage_mb / stats.mem_limit_mb) * 100).toFixed(0) : 0;
           metricsBox.innerHTML = `
-            <div class="grid grid-2" style="gap:8px;">
-              <div>
-                <div class="dim" style="font-size:0.75rem;">CPU</div>
-                <div class="mono">${cpuPct}%</div>
-                <div style="background:var(--panel-2);border-radius:4px;height:6px;margin-top:4px;">
-                  <div style="width:${Math.min(cpuPct, 100)}%;height:100%;background:var(--primary);border-radius:4px;transition:width .3s;"></div>
-                </div>
+            <div class="grid grid-2" style="gap:10px;">
+              <div class="metric">
+                <div class="label">CPU</div>
+                <div class="value" style="font-size:20px;">${cpuPct}%</div>
+                <div class="progress${cpuPct > 80 ? ' danger' : cpuPct > 60 ? ' warn' : ''}"><span style="width:${Math.min(cpuPct, 100)}%;"></span></div>
               </div>
-              <div>
-                <div class="dim" style="font-size:0.75rem;">Memory</div>
-                <div class="mono">${memUsed} / ${memLimit} MB</div>
-                <div style="background:var(--panel-2);border-radius:4px;height:6px;margin-top:4px;">
-                  <div style="width:${Math.min(memPct, 100)}%;height:100%;background:${memPct > 80 ? 'var(--warn)' : 'var(--ok)'};border-radius:4px;transition:width .3s;"></div>
-                </div>
+              <div class="metric">
+                <div class="label">Memory</div>
+                <div class="value" style="font-size:20px;">${memUsed} / ${memLimit} MB</div>
+                <div class="progress${memPct > 80 ? ' danger' : memPct > 60 ? ' warn' : ''}"><span style="width:${Math.min(memPct, 100)}%;"></span></div>
               </div>
             </div>
           `;
         }).catch(() => {
-          metricsBox.innerHTML = `<div class="dim" style="font-size:0.85rem;">Metrics tidak tersedia.</div>`;
+          metricsBox.innerHTML = `<div class="muted" style="font-size:0.85rem;">Metrics tidak tersedia.</div>`;
         });
       } else {
-        metricsBox.innerHTML = `<div class="dim" style="font-size:0.85rem;">Metrics hanya tersedia untuk instance running.</div>`;
+        metricsBox.innerHTML = `<div class="muted" style="font-size:0.85rem;">Metrics hanya tersedia untuk instance running.</div>`;
       }
 
       applyNetworkBtn.addEventListener("click", async () => {
@@ -491,7 +492,7 @@ export const computeView = {
             await apis.compute.updateSecurityGroup(instanceId, selected);
           });
           msg.className = "message ok";
-          msg.textContent = "Security group berhasil diupdate. State preserved.";
+          msg.textContent = "Security group berhasil diupdate.";
           await reloadAll();
         } catch (error) {
           msg.className = "message error";
@@ -521,7 +522,7 @@ export const computeView = {
         }
       });
 
-      // ── Expose / Unexpose handlers ──────────────────────────
+      // Expose / Unexpose handlers
       const exposeBtn = modalRoot.querySelector("#modal-expose-btn");
       const unexposeBtn = modalRoot.querySelector("#modal-unexpose");
 
@@ -576,9 +577,9 @@ export const computeView = {
               <option value="300">300</option>
               <option value="500">500</option>
             </select>
-            <button id="log-refresh" class="btn btn-inline btn-ghost" style="margin-left:8px;">Refresh</button>
+            <button id="log-refresh" class="btn btn-inline btn-ghost" style="margin-left:8px;">↻ Refresh</button>
           </div>
-          <pre id="log-output" class="mono panel" style="min-height:200px;max-height:400px;overflow:auto;font-size:0.8rem;white-space:pre-wrap;"><span class="spinner"></span> Loading logs…</pre>
+          <pre id="log-output" class="mono" style="min-height:200px;max-height:400px;overflow:auto;font-size:0.8rem;white-space:pre-wrap;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;"><span class="spinner"></span> Loading logs…</pre>
         `,
       });
       const output = modal.wrapper.querySelector("#log-output");
@@ -605,10 +606,14 @@ export const computeView = {
       const modal = showModal({
         title: `Exec Command — ${instanceId.slice(0, 8)}`,
         bodyHtml: `
-          <label class="field-label">Command</label>
-          <input id="exec-command" value="uname -a" />
-          <button id="run-exec" class="btn btn-inline" style="margin-top:8px;">Run</button>
-          <pre id="exec-output" class="mono panel" style="margin-top:10px;min-height:120px;">-</pre>
+          <div class="stack-md">
+            <div>
+              <label class="field-label">Command</label>
+              <input id="exec-command" value="uname -a" />
+            </div>
+            <button id="run-exec" class="btn btn-primary btn-inline">▶ Run</button>
+            <pre id="exec-output" class="mono" style="min-height:120px;background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px;font-size:0.8rem;white-space:pre-wrap;">-</pre>
+          </div>
         `,
       });
       const runBtn = modal.wrapper.querySelector("#run-exec");
@@ -645,7 +650,7 @@ export const computeView = {
       }
 
       try {
-        const result = await withLoading(createBtn, "Creating...", async () => apis.compute.createInstance(payload));
+        const result = await withLoading(createBtn, "Launching...", async () => apis.compute.createInstance(payload));
         messageEl.className = "message ok";
         messageEl.textContent = `Instance sedang dibuat — ${result.status_detail || "queued"}`;
         form.reset();
@@ -699,7 +704,6 @@ export const computeView = {
           const fitAddon = new window.FitAddon.FitAddon();
           term.loadAddon(fitAddon);
           term.open(termContainer);
-          // Wait slightly for DOM to settle before fitting
           setTimeout(() => fitAddon.fit(), 50);
 
           const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -732,7 +736,6 @@ export const computeView = {
              term.writeln('\\r\\n*** Connection Error ***\\r\\n');
           };
           
-          // Handle cleanup on modal close
           const oldClose = modal.close;
           modal.close = () => {
              if (pingInterval) clearInterval(pingInterval);
@@ -741,7 +744,6 @@ export const computeView = {
              oldClose();
           };
           
-          // Handle window resize
           const resizeHandler = () => fitAddon.fit();
           window.addEventListener("resize", resizeHandler);
           const cleanupResize = () => window.removeEventListener("resize", resizeHandler);
@@ -776,8 +778,12 @@ export const computeView = {
           const modal = showModal({
             title: "Create Snapshot",
             bodyHtml: `
-              <label class="field-label" for="snap-name">Nama snapshot (opsional)</label>
-              <input id="snap-name" placeholder="my-snapshot" />
+              <div class="stack-md">
+                <div>
+                  <label class="field-label" for="snap-name">Nama snapshot (opsional)</label>
+                  <input id="snap-name" placeholder="my-snapshot" />
+                </div>
+              </div>
             `,
             actions: [
               {

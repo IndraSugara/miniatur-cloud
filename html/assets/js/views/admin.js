@@ -13,34 +13,42 @@ export const adminView = {
     const isAdmin = state.user?.is_admin || false;
 
     root.innerHTML = `
-      <section class="panel" id="profile-panel">
-        <h3>Profil Saya</h3>
-        <div id="profile-content"><span class="dim"><span class="spinner"></span> Memuat...</span></div>
-      </section>
+      <div class="grid grid-2">
+        <section class="panel" id="profile-panel">
+          <div class="panel-header">
+            <h3>Profil Saya</h3>
+          </div>
+          <div id="profile-content"><span class="dim"><span class="spinner"></span> Memuat...</span></div>
+        </section>
 
-      <section class="panel" id="password-panel">
-        <h3>Ubah Password</h3>
-        <form id="change-password-form" class="stack-md" style="max-width:420px;">
-          <div>
-            <label class="field-label" for="cp-current">Password Saat Ini</label>
-            <input id="cp-current" type="password" required autocomplete="current-password" />
+        <section class="panel" id="password-panel">
+          <div class="panel-header">
+            <h3>Ubah Password</h3>
           </div>
-          <div>
-            <label class="field-label" for="cp-new">Password Baru</label>
-            <input id="cp-new" type="password" required minlength="8" autocomplete="new-password" />
-          </div>
-          <div>
-            <label class="field-label" for="cp-confirm">Konfirmasi Password Baru</label>
-            <input id="cp-confirm" type="password" required minlength="8" autocomplete="new-password" />
-          </div>
-          <button class="btn btn-primary" type="submit">Ubah Password</button>
-        </form>
-        <p id="cp-message" class="message hidden"></p>
-      </section>
+          <form id="change-password-form" class="stack-md">
+            <div>
+              <label class="field-label" for="cp-current">Password Saat Ini</label>
+              <input id="cp-current" type="password" required autocomplete="current-password" />
+            </div>
+            <div>
+              <label class="field-label" for="cp-new">Password Baru</label>
+              <input id="cp-new" type="password" required minlength="8" autocomplete="new-password" />
+            </div>
+            <div>
+              <label class="field-label" for="cp-confirm">Konfirmasi Password Baru</label>
+              <input id="cp-confirm" type="password" required minlength="8" autocomplete="new-password" />
+            </div>
+            <button class="btn btn-primary" type="submit">Ubah Password</button>
+          </form>
+          <p id="cp-message" class="message hidden"></p>
+        </section>
+      </div>
 
       ${isAdmin ? `
       <section class="panel">
-        <h3>Register User Baru</h3>
+        <div class="panel-header">
+          <h3>Register User Baru</h3>
+        </div>
         <form id="register-user-form" class="grid grid-3">
           <div>
             <label class="field-label" for="reg-username">Username</label>
@@ -61,7 +69,9 @@ export const adminView = {
       </section>
 
       <section class="panel">
-        <h3>User List</h3>
+        <div class="panel-header">
+          <h3>User List</h3>
+        </div>
         <div class="table-wrap">
           <table>
             <thead>
@@ -88,28 +98,29 @@ export const adminView = {
     async function loadProfile() {
       try {
         const me = await apis.auth.me();
-        state.user = me; // Refresh state
+        state.user = me;
         const quota = me.quota_instances || 0;
         profileContent.innerHTML = `
-          <div class="grid grid-2">
-            <div>
-              <div class="dim" style="font-size:12px;">Username</div>
-              <div><strong>${escapeHtml(me.username)}</strong> ${me.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : ""}</div>
+          <div style="display:flex;align-items:center;gap:16px;margin-bottom:14px;">
+            <div style="width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,#60a5fa,#818cf8);display:grid;place-items:center;font-size:20px;font-weight:700;color:#fff;flex-shrink:0;">
+              ${(me.username || "?").slice(0, 2).toUpperCase()}
             </div>
             <div>
-              <div class="dim" style="font-size:12px;">Email</div>
-              <div>${escapeHtml(me.email)}</div>
-            </div>
-            <div>
-              <div class="dim" style="font-size:12px;">Instance Quota</div>
-              <div><strong>${quota}</strong> instance</div>
-            </div>
-            <div>
-              <div class="dim" style="font-size:12px;">User ID</div>
-              <div class="mono" style="font-size:12px;">${escapeHtml(me.id)}</div>
+              <div style="font-size:18px;font-weight:700;">${escapeHtml(me.username)} ${me.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : ""}</div>
+              <div class="muted" style="font-size:13px;">${escapeHtml(me.email)}</div>
             </div>
           </div>
-          ${!me.is_admin && quota <= 3 ? `<p class="dim" style="margin-top:8px;font-size:12px;">Butuh quota lebih? Hubungi administrator.</p>` : ""}
+          <div class="stack-sm" style="max-width:300px;">
+            <div class="field-row">
+              <span class="muted">Instance Quota</span>
+              <strong>${quota}</strong>
+            </div>
+            <div class="field-row">
+              <span class="muted">User ID</span>
+              <code class="mono" style="font-size:11px;">${escapeHtml(me.id)}</code>
+            </div>
+          </div>
+          ${!me.is_admin && quota <= 3 ? `<p class="muted" style="margin-top:10px;font-size:12px;">Butuh quota lebih? Hubungi administrator.</p>` : ""}
         `;
       } catch (error) {
         profileContent.innerHTML = `<p class="message error">${message(error)}</p>`;
@@ -151,7 +162,6 @@ export const adminView = {
 
     // ── Admin-only sections ──
     if (isAdmin) {
-      // Load user list
       const usersBody = root.querySelector("#users-body");
       async function loadUsers() {
         try {
@@ -165,12 +175,12 @@ export const adminView = {
             .map(
               (item) => `
                 <tr>
-                  <td>${escapeHtml(item.username)}</td>
+                  <td><strong>${escapeHtml(item.username)}</strong></td>
                   <td>${escapeHtml(item.email)}</td>
-                  <td>${item.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : "user"}</td>
-                  <td>${item.is_active ? "active" : "inactive"}</td>
+                  <td>${item.is_admin ? '<span class="badge badge-blue" style="font-size:10px;">admin</span>' : '<span class="muted">user</span>'}</td>
+                  <td>${item.is_active ? '<span class="badge badge-green" style="font-size:10px;">active</span>' : '<span class="badge badge-dim" style="font-size:10px;">inactive</span>'}</td>
                   <td>${item.quota_instances}</td>
-                  <td>${toLocalDate(item.created_at)}</td>
+                  <td class="muted">${toLocalDate(item.created_at)}</td>
                 </tr>
               `,
             )
@@ -180,7 +190,6 @@ export const adminView = {
         }
       }
 
-      // Register form
       root.querySelector("#register-user-form").addEventListener("submit", async (event) => {
         event.preventDefault();
         const payload = {

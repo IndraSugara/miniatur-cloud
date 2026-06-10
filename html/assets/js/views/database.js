@@ -1,6 +1,5 @@
 /**
  * Database (RDS) view — managed PostgreSQL databases.
- * Consistent table-based pattern like Compute/Network/Storage.
  */
 
 import { REFRESH_MS } from "../config.js";
@@ -13,13 +12,13 @@ function errMsg(error) {
 
 function statusBadge(status) {
   const map = {
-    available: '<span class="badge badge-green">available</span>',
-    creating: '<span class="badge badge-yellow">creating</span>',
-    stopped: '<span class="badge badge-dim">stopped</span>',
-    deleting: '<span class="badge badge-yellow">deleting</span>',
-    error: '<span class="badge badge-red">error</span>',
+    available: '<span class="status available">available</span>',
+    creating: '<span class="status creating">creating</span>',
+    stopped: '<span class="status stopped">stopped</span>',
+    deleting: '<span class="status deleting">deleting</span>',
+    error: '<span class="status error">error</span>',
   };
-  return map[status] || `<span class="badge badge-dim">${status}</span>`;
+  return map[status] || `<span class="status stopped">${status}</span>`;
 }
 
 async function copyText(text, label) {
@@ -76,13 +75,17 @@ export const databaseView = {
 
       root.innerHTML = `
         <section class="panel">
-          <div class="toolbar" style="justify-content:space-between;margin-bottom:12px;">
-            <h3 style="margin:0;">Databases${activeWs ? " in Workspace" : ""}</h3>
-            <button id="rds-create-btn" class="btn btn-primary">+ Create Database</button>
+          <div class="panel-header">
+            <h3>Databases${activeWs ? " in Workspace" : ""}</h3>
+            <button id="rds-create-btn" class="btn btn-primary btn-inline">+ Create Database</button>
           </div>
 
           ${filtered.length === 0
-            ? `<p class="dim">Belum ada database${activeWs ? " di workspace ini" : ""}. Klik "Create Database" untuk memulai.</p>`
+            ? `<div class="empty-state" style="padding:24px 0;">
+                <div class="empty-icon">🗄</div>
+                <p>Belum ada database${activeWs ? " di workspace ini" : ""}.</p>
+                <button class="btn btn-primary btn-inline" id="rds-create-btn-empty">+ Create Database</button>
+              </div>`
             : `<div class="table-wrap"><table>
               <thead>
                 <tr>
@@ -100,20 +103,20 @@ export const databaseView = {
                 ${filtered.map((d) => `
                   <tr>
                     <td><strong>${escapeHtml(d.name)}</strong></td>
-                    <td><span class="dim">${escapeHtml(d.engine)}</span></td>
+                    <td class="muted">${escapeHtml(d.engine)}</td>
                     <td>${statusBadge(d.status)}</td>
-                    <td><code>${escapeHtml(d.ip_address || "-")}</code></td>
+                    <td><code class="mono" style="font-size:12px;">${escapeHtml(d.ip_address || "-")}</code></td>
                     <td>${renderNetworkLink(d.network_id)}</td>
                     <td>${d.public_hostname
                       ? `<span class="badge badge-blue">port ${d.expose_port}</span>`
                       : `<span class="dim">—</span>`
                     }</td>
-                    <td class="dim">${toLocalDate(d.created_at)}</td>
+                    <td class="muted">${toLocalDate(d.created_at)}</td>
                     <td>
                       <div class="actions">
                         <button class="btn btn-inline rds-detail-btn" data-id="${d.id}">Detail</button>
                         ${d.status === "available" ? `<button class="btn btn-inline rds-stop-btn" data-id="${d.id}">Stop</button>` : ""}
-                        ${d.status === "stopped" ? `<button class="btn btn-inline rds-start-btn" data-id="${d.id}">Start</button>` : ""}
+                        ${d.status === "stopped" ? `<button class="btn btn-inline btn-success rds-start-btn" data-id="${d.id}">Start</button>` : ""}
                         <button class="btn btn-inline btn-danger rds-delete-btn" data-id="${d.id}" data-name="${escapeHtml(d.name)}">Delete</button>
                       </div>
                     </td>
@@ -127,6 +130,7 @@ export const databaseView = {
 
       // ── Event bindings ──
       document.getElementById("rds-create-btn")?.addEventListener("click", showCreateModal);
+      document.getElementById("rds-create-btn-empty")?.addEventListener("click", showCreateModal);
 
       root.querySelectorAll(".rds-detail-btn").forEach((btn) => {
         btn.addEventListener("click", () => showDetailModal(btn.dataset.id));
@@ -201,7 +205,7 @@ export const databaseView = {
               <label class="field-label">Network</label>
               <select id="rds-network">${networkOptions || '<option value="">No networks available</option>'}</select>
             </div>
-            <p class="dim" style="font-size:12px;">Database akan ditempatkan di network yang dipilih. Instance di network yang sama bisa mengakses via IP internal.</p>
+            <p class="muted" style="font-size:12px;">Database akan ditempatkan di network yang dipilih. Instance di network yang sama bisa mengakses via IP internal.</p>
           </div>
         `,
         actions: [
@@ -239,62 +243,64 @@ export const databaseView = {
       const modal = showModal({
         title: `Database: ${detail.name}`,
         bodyHtml: `
-          <div class="grid grid-2" style="gap:16px;">
+          <div class="grid grid-2" style="gap:20px;">
             <div>
-              <h4 style="margin-top:0;">Connection Info</h4>
+              <h4 style="margin:0 0 12px;font-size:14px;color:var(--text-secondary);">Connection Info</h4>
               <div class="stack-sm">
-                <div class="field-row"><span class="dim">Host</span><code>${escapeHtml(detail.ip_address || "pending")}</code></div>
-                <div class="field-row"><span class="dim">Port</span><code>${detail.port}</code></div>
-                <div class="field-row"><span class="dim">Database</span><code>${escapeHtml(detail.db_name)}</code></div>
-                <div class="field-row"><span class="dim">Username</span><code>${escapeHtml(detail.db_user)}</code></div>
+                <div class="field-row"><span class="muted">Host</span><code class="mono" style="font-size:12px;">${escapeHtml(detail.ip_address || "pending")}</code></div>
+                <div class="field-row"><span class="muted">Port</span><code class="mono">${detail.port}</code></div>
+                <div class="field-row"><span class="muted">Database</span><code class="mono">${escapeHtml(detail.db_name)}</code></div>
+                <div class="field-row"><span class="muted">Username</span><code class="mono">${escapeHtml(detail.db_user)}</code></div>
                 <div class="field-row">
-                  <span class="dim">Password</span>
-                  <code id="modal-db-pw">${escapeHtml(detail.db_password)}</code>
-                  <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.db_password)}" data-label="Password">📋</button>
+                  <span class="muted">Password</span>
+                  <span style="display:flex;align-items:center;gap:4px;">
+                    <code class="mono" id="modal-db-pw">${escapeHtml(detail.db_password)}</code>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.db_password)}" data-label="Password">📋</button>
+                  </span>
                 </div>
-                <hr style="border-color:var(--line);margin:8px 0;" />
+                <hr style="border-color:var(--border-subtle);margin:6px 0;" />
                 <div>
-                  <span class="dim" style="font-size:12px;">Connection String</span>
+                  <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string)}</code>
-                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.connection_string)}" data-label="Connection string">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string)}" data-label="Connection string">📋</button>
                   </div>
                 </div>
                 <div>
-                  <span class="dim" style="font-size:12px;">Async Connection String</span>
+                  <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Async Connection String</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.connection_string_async)}</code>
-                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.connection_string_async)}" data-label="Async connection string">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.connection_string_async)}" data-label="Async connection string">📋</button>
                   </div>
                 </div>
                 ${detail.public_url ? `
                 <div>
-                  <span class="dim" style="font-size:12px;">Public Connection</span>
+                  <span class="muted" style="font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Public Connection</span>
                   <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
                     <code style="font-size:11px;word-break:break-all;flex:1;">${escapeHtml(detail.public_url)}</code>
-                    <button class="btn btn-inline btn-xs modal-copy-btn" data-text="${escapeHtml(detail.public_url)}" data-label="Public URL">📋</button>
+                    <button class="btn btn-xs btn-ghost modal-copy-btn" data-text="${escapeHtml(detail.public_url)}" data-label="Public URL">📋</button>
                   </div>
                 </div>
                 ` : ""}
               </div>
             </div>
             <div>
-              <h4 style="margin-top:0;">Details & Actions</h4>
+              <h4 style="margin:0 0 12px;font-size:14px;color:var(--text-secondary);">Details & Actions</h4>
               <div class="stack-sm">
-                <div class="field-row"><span class="dim">ID</span><code style="font-size:11px;">${escapeHtml(detail.id)}</code></div>
-                <div class="field-row"><span class="dim">Engine</span><span>${escapeHtml(detail.engine)}</span></div>
-                <div class="field-row"><span class="dim">Network</span><span>${resolveNetworkName(detail.network_id)}</span></div>
-                <div class="field-row"><span class="dim">Public DNS</span><span>${escapeHtml(detail.public_hostname || "—")}</span></div>
-                <div class="field-row"><span class="dim">Created</span><span>${toLocalDate(detail.created_at)}</span></div>
+                <div class="field-row"><span class="muted">ID</span><code style="font-size:11px;">${escapeHtml(detail.id)}</code></div>
+                <div class="field-row"><span class="muted">Engine</span><span>${escapeHtml(detail.engine)}</span></div>
+                <div class="field-row"><span class="muted">Network</span><span>${resolveNetworkName(detail.network_id)}</span></div>
+                <div class="field-row"><span class="muted">Public DNS</span><span>${escapeHtml(detail.public_hostname || "—")}</span></div>
+                <div class="field-row"><span class="muted">Created</span><span>${toLocalDate(detail.created_at)}</span></div>
               </div>
-              <h4>Actions</h4>
-              <div style="display:flex;flex-wrap:wrap;gap:8px;">
-                ${isAvailable ? `<button class="btn btn-ghost modal-action" data-action="stop">⏹ Stop</button>
-                  <button class="btn btn-ghost modal-action" data-action="reboot">🔄 Reboot</button>` : ""}
-                ${isStopped ? `<button class="btn btn-primary modal-action" data-action="start">▶ Start</button>` : ""}
-                ${isAvailable ? `<button class="btn btn-ghost modal-reset-pw">🔑 Reset Password</button>` : ""}
-                ${isAvailable && !detail.public_hostname ? `<button class="btn btn-ghost modal-expose">🌐 Expose Public</button>` : ""}
-                ${detail.public_hostname ? `<button class="btn btn-ghost modal-unexpose">🔒 Unexpose</button>` : ""}
+              <h4 style="margin:16px 0 8px;font-size:14px;color:var(--text-secondary);">Actions</h4>
+              <div style="display:flex;flex-wrap:wrap;gap:6px;">
+                ${isAvailable ? `<button class="btn btn-inline modal-action" data-action="stop">⏹ Stop</button>
+                  <button class="btn btn-inline modal-action" data-action="reboot">🔄 Reboot</button>` : ""}
+                ${isStopped ? `<button class="btn btn-inline btn-success modal-action" data-action="start">▶ Start</button>` : ""}
+                ${isAvailable ? `<button class="btn btn-inline modal-reset-pw">🔑 Reset Password</button>` : ""}
+                ${isAvailable && !detail.public_hostname ? `<button class="btn btn-inline modal-expose">🌐 Expose Public</button>` : ""}
+                ${detail.public_hostname ? `<button class="btn btn-inline btn-danger modal-unexpose">🔒 Unexpose</button>` : ""}
               </div>
               ${detail.error_message ? `<div class="message error" style="margin-top:12px;">${escapeHtml(detail.error_message)}</div>` : ""}
             </div>
