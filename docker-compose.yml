@@ -184,7 +184,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/ingress:/etc/nginx/ingress:ro
-      - ./html:/usr/share/nginx/html:ro
+      - ./console:/usr/share/nginx/html:ro
     networks:
       - cloud-net
     depends_on:
