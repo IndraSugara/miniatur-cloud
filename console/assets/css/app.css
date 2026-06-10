@@ -1348,6 +1348,67 @@ tr:hover td {
   margin-bottom: 14px;
 }
 
+/* ── Action Dropdown (table row) ─────────────────────────── */
+.action-dropdown {
+  position: relative;
+  display: inline-block;
+}
+
+.action-dropdown-trigger {
+  padding: 5px 8px;
+  font-size: 12px;
+  min-width: 28px;
+}
+
+.action-dropdown-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  min-width: 140px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 4px;
+  z-index: 40;
+  animation: dropdownIn 0.12s var(--ease);
+}
+
+.action-dropdown-menu .dropdown-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-family: var(--font);
+  transition: background 0.1s;
+}
+
+.action-dropdown-menu .dropdown-item:hover {
+  background: var(--bg-hover);
+}
+
+.action-dropdown-menu .dropdown-item.danger {
+  color: var(--danger);
+}
+
+.action-dropdown-menu .dropdown-item.danger:hover {
+  background: var(--danger-dim);
+}
+
+.action-dropdown-menu .dropdown-divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 3px 6px;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    STAT CARDS (Dashboard)
    ═══════════════════════════════════════════════════════════════ */

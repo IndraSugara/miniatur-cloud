@@ -250,40 +250,42 @@ export const computeView = {
               <td>
                 <div class="actions">
                   <button class="btn btn-inline" data-action="detail" data-id="${item.id}">Detail</button>
-                  <button class="btn btn-inline" data-action="logs" data-id="${item.id}">Logs</button>
-                  <button class="btn btn-inline" data-action="exec" data-id="${item.id}">Exec</button>
                   ${
                     item.status === "running"
                       ? `<button class="btn btn-inline" data-action="console" data-id="${item.id}">Console</button>`
                       : ""
                   }
-                  ${
-                    item.status === "running" && !item.public_url
-                      ? `<button class="btn btn-inline btn-success" data-action="expose" data-id="${item.id}">Expose</button>`
-                      : ""
-                  }
-                  ${
-                    item.public_url
-                      ? `<button class="btn btn-inline btn-danger" data-action="unexpose" data-id="${item.id}">Unexpose</button>`
-                      : ""
-                  }
-                  <button class="btn btn-inline" data-action="snapshot" data-id="${item.id}">Snap</button>
-                  ${
-                    item.status === "running"
-                      ? `<button class="btn btn-inline" data-action="stop" data-id="${item.id}">Stop</button>`
-                      : ""
-                  }
-                  ${
-                    item.status === "stopped"
-                      ? `<button class="btn btn-inline btn-success" data-action="start" data-id="${item.id}">Start</button>`
-                      : ""
-                  }
-                  ${
-                    item.status === "running"
-                      ? `<button class="btn btn-inline" data-action="reboot" data-id="${item.id}">Reboot</button>`
-                      : ""
-                  }
-                  <button class="btn btn-inline btn-danger" data-action="terminate" data-id="${item.id}">Terminate</button>
+                  <button class="btn btn-inline" data-action="logs" data-id="${item.id}">Logs</button>
+                  <div class="action-dropdown" data-dropdown="${item.id}">
+                    <button class="btn btn-inline action-dropdown-trigger" data-id="${item.id}">▾</button>
+                    <div class="action-dropdown-menu hidden">
+                      <button class="dropdown-item" data-action="exec" data-id="${item.id}">Exec</button>
+                      ${
+                        item.status === "running"
+                          ? `<button class="dropdown-item" data-action="reboot" data-id="${item.id}">Reboot</button>
+                             <button class="dropdown-item" data-action="stop" data-id="${item.id}">Stop</button>`
+                          : ""
+                      }
+                      ${
+                        item.status === "stopped"
+                          ? `<button class="dropdown-item" data-action="start" data-id="${item.id}">Start</button>`
+                          : ""
+                      }
+                      ${
+                        item.status === "running" && !item.public_url
+                          ? `<button class="dropdown-item" data-action="expose" data-id="${item.id}">Expose</button>`
+                          : ""
+                      }
+                      ${
+                        item.public_url
+                          ? `<button class="dropdown-item" data-action="unexpose" data-id="${item.id}">Unexpose</button>`
+                          : ""
+                      }
+                      <button class="dropdown-item" data-action="snapshot" data-id="${item.id}">Snapshot</button>
+                      <div class="dropdown-divider"></div>
+                      <button class="dropdown-item danger" data-action="terminate" data-id="${item.id}">Terminate</button>
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>
@@ -670,12 +672,44 @@ export const computeView = {
       renderSnapshots().catch((error) => toast(extractMessage(error), "error"));
     });
 
+    // Action dropdown toggle
+    instanceBody.addEventListener("click", (event) => {
+      const trigger = event.target.closest(".action-dropdown-trigger");
+      if (!trigger) {
+        // Close all open dropdowns if clicking outside
+        instanceBody.querySelectorAll(".action-dropdown-menu").forEach((menu) => {
+          if (!menu.contains(event.target)) menu.classList.add("hidden");
+        });
+        return;
+      }
+      event.stopPropagation();
+      const dropdown = trigger.closest(".action-dropdown");
+      const menu = dropdown.querySelector(".action-dropdown-menu");
+      // Close all other dropdowns first
+      instanceBody.querySelectorAll(".action-dropdown-menu").forEach((m) => {
+        if (m !== menu) m.classList.add("hidden");
+      });
+      menu.classList.toggle("hidden");
+    });
+
+    // Close dropdown on document click
+    const closeDropdowns = (event) => {
+      if (!event.target.closest(".action-dropdown")) {
+        instanceBody.querySelectorAll(".action-dropdown-menu").forEach((m) => m.classList.add("hidden"));
+      }
+    };
+    document.addEventListener("click", closeDropdowns);
+
     instanceBody.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+      // Skip if click was on dropdown trigger
+      if (target.closest(".action-dropdown-trigger")) return;
       const action = target.dataset.action;
       const id = target.dataset.id;
       if (!action || !id) return;
+      // Close any open action dropdown
+      target.closest(".action-dropdown-menu")?.classList.add("hidden");
       try {
         if (action === "detail") {
           await openDetailModal(id);
@@ -854,6 +888,9 @@ export const computeView = {
       });
     }, REFRESH_MS);
 
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("click", closeDropdowns);
+    };
   },
 };
