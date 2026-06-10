@@ -698,6 +698,7 @@ input::placeholder { color: var(--text-muted); }
   width: 18px;
   height: 18px;
   object-fit: contain;
+  filter: brightness(0) invert(1);
 }
 
 .nav-item.active .nav-icon { opacity: 1; }
