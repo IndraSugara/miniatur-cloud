@@ -702,7 +702,7 @@ input::placeholder { color: var(--text-muted); }
 }
 
 .nav-item.active .nav-icon { opacity: 1; }
-.nav-item.active .nav-icon svg { color: #ff8c00; }
+.nav-item.active .nav-icon img { filter: none; }
 
 /* Sidebar footer */
 .sidebar-footer {

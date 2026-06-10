@@ -168,8 +168,8 @@ export const computeView = {
       imageSelect.innerHTML = images
         .map((img) => {
           const key = typeof img === "string" ? img : img.key;
-          const desc = typeof img === "object" && img.description ? ` — ${img.description}` : "";
-          return `<option value="${key}">${key}${desc}</option>`;
+          const desc = typeof img === "object" && img.description ? ` — ${escapeHtml(img.description)}` : "";
+          return `<option value="${escapeHtml(key)}">${escapeHtml(key)}${desc}</option>`;
         })
         .join("");
 
@@ -177,8 +177,8 @@ export const computeView = {
         .map(
           ([key, value]) => {
             const gpuBadge = value.gpu ? " [GPU]" : "";
-            const desc = value.description ? ` — ${value.description}` : "";
-            return `<option value="${key}">${key} (${value.vcpu} vCPU / ${value.memory_mb} MB${gpuBadge})${desc}</option>`;
+            const desc = value.description ? ` — ${escapeHtml(value.description)}` : "";
+            return `<option value="${escapeHtml(key)}">${escapeHtml(key)} (${value.vcpu} vCPU / ${value.memory_mb} MB${gpuBadge})${desc}</option>`;
           },
         )
         .join("");
@@ -259,7 +259,11 @@ export const computeView = {
                   <div class="action-dropdown" data-dropdown="${item.id}">
                     <button class="btn btn-inline action-dropdown-trigger" data-id="${item.id}">▾</button>
                     <div class="action-dropdown-menu hidden">
-                      <button class="dropdown-item" data-action="exec" data-id="${item.id}">Exec</button>
+                      ${
+                        item.status === "running"
+                          ? `<button class="dropdown-item" data-action="exec" data-id="${item.id}">Exec</button>`
+                          : ""
+                      }
                       ${
                         item.status === "running"
                           ? `<button class="dropdown-item" data-action="reboot" data-id="${item.id}">Reboot</button>
@@ -695,7 +699,7 @@ export const computeView = {
     // Close dropdown on document click
     const closeDropdowns = (event) => {
       if (!event.target.closest(".action-dropdown")) {
-        instanceBody.querySelectorAll(".action-dropdown-menu").forEach((m) => m.classList.add("hidden"));
+        instanceBody?.querySelectorAll(".action-dropdown-menu")?.forEach((m) => m.classList.add("hidden"));
       }
     };
     document.addEventListener("click", closeDropdowns);

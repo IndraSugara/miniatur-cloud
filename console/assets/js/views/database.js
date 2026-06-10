@@ -18,7 +18,7 @@ function statusBadge(status) {
     deleting: '<span class="status deleting">deleting</span>',
     error: '<span class="status error">error</span>',
   };
-  return map[status] || `<span class="status stopped">${status}</span>`;
+  return map[status] || `<span class="status stopped">${escapeHtml(status)}</span>`;
 }
 
 async function copyText(text, label) {

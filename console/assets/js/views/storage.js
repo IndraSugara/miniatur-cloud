@@ -231,7 +231,7 @@ export const storageView = {
           )
           .join("");
       } catch (error) {
-        objectBody.innerHTML = `<tr><td colspan="4" class="dim">Gagal memuat: ${em(error)}</td></tr>`;
+        objectBody.innerHTML = `<tr><td colspan="4" class="dim">Gagal memuat: ${escapeHtml(em(error))}</td></tr>`;
       }
     }
 
@@ -455,12 +455,12 @@ export const storageView = {
             throw new Error(`Upload failed: HTTP ${uploadRes.status}`);
           }
 
-          statusEl.innerHTML = `<img src="/assets/icons/upload-success.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${em(file.name)} berhasil diupload!`;
+          statusEl.innerHTML = `<img src="/assets/icons/upload-success.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${escapeHtml(file.name)} berhasil diupload!`;
           statusEl.className = "message ok";
           modal.close();
           await loadObjects();
         } catch (error) {
-          statusEl.innerHTML = `<img src="/assets/icons/upload-error.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${em(error)}`;
+          statusEl.innerHTML = `<img src="/assets/icons/upload-error.png" alt="" width="16" height="16" style="vertical-align:middle;" /> ${escapeHtml(em(error))}`;
           statusEl.className = "message error";
         }
       }
