@@ -449,6 +449,7 @@ export const computeView = {
       // Fetch instance metrics asynchronously
       const metricsBox = modalRoot.querySelector("#instance-metrics");
       if (detail.status === "running") {
+        // Live metrics from Docker stats (fast, always works)
         apis.compute.getInstanceStatus(instanceId).then((stats) => {
           const cpuPct = stats.cpu_percent != null ? stats.cpu_percent.toFixed(1) : "N/A";
           const memUsed = stats.mem_usage_mb != null ? stats.mem_usage_mb.toFixed(0) : "-";
@@ -458,17 +459,103 @@ export const computeView = {
           metricsBox.innerHTML = `
             <div class="grid grid-2" style="gap:10px;">
               <div class="metric">
-                <div class="label">CPU</div>
+                <div class="label">CPU (Live)</div>
                 <div class="value" style="font-size:20px;">${cpuPct}%</div>
                 <div class="progress${cpuPct > 80 ? ' danger' : cpuPct > 60 ? ' warn' : ''}"><span style="width:${Math.min(cpuPct, 100)}%;"></span></div>
               </div>
               <div class="metric">
-                <div class="label">Memory</div>
+                <div class="label">Memory (Live)</div>
                 <div class="value" style="font-size:20px;">${memUsed} / ${memLimit} MB</div>
                 <div class="progress${memPct > 80 ? ' danger' : memPct > 60 ? ' warn' : ''}"><span style="width:${Math.min(memPct, 100)}%;"></span></div>
               </div>
             </div>
+            <div id="instance-historical" style="margin-top:14px;">
+              <div class="dim"><span class="spinner"></span> Loading historical charts...</div>
+            </div>
           `;
+
+          // Load historical charts from Prometheus/cAdvisor
+          const histBox = metricsBox.querySelector("#instance-historical");
+          apis.monitor.instanceMetricsRange(instanceId, "now-30m", "now", "15s")
+            .then((rangeData) => {
+              const timestamps = (rangeData.cpu_percent || []).map((p) => {
+                const d = new Date(p.t * 1000);
+                return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+              });
+              histBox.innerHTML = `
+                <div class="muted" style="margin-bottom:8px;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;">Historical (Last 30 min)</div>
+                <div class="grid grid-2" style="gap:10px;">
+                  <div style="position:relative;height:120px;"><canvas id="hist-cpu"></canvas></div>
+                  <div style="position:relative;height:120px;"><canvas id="hist-mem"></canvas></div>
+                </div>
+              `;
+
+              setTimeout(() => {
+                const cpuCtx = modalRoot.querySelector("#hist-cpu")?.getContext("2d");
+                if (cpuCtx && rangeData.cpu_percent?.length) {
+                  if (typeof Chart !== "undefined") {
+                    new Chart(cpuCtx, {
+                      type: "line",
+                      data: {
+                        labels: timestamps,
+                        datasets: [{
+                          label: "CPU %",
+                          data: rangeData.cpu_percent.map((p) => p.v),
+                          borderColor: "#ff8c00",
+                          backgroundColor: "rgba(255,140,0,0.08)",
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: 0,
+                          borderWidth: 1.5,
+                        }],
+                      },
+                      options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { font: { size: 8 }, maxTicksLimit: 5 }, grid: { display: false } },
+                          y: { beginAtZero: true, max: 100, ticks: { font: { size: 8 } }, grid: { color: "rgba(0,0,0,0.04)" } },
+                        },
+                      },
+                    });
+                  }
+                }
+                const memCtx = modalRoot.querySelector("#hist-mem")?.getContext("2d");
+                if (memCtx && rangeData.memory_mb?.length) {
+                  if (typeof Chart !== "undefined") {
+                    new Chart(memCtx, {
+                      type: "line",
+                      data: {
+                        labels: timestamps,
+                        datasets: [{
+                          label: "Memory MB",
+                          data: rangeData.memory_mb.map((p) => p.v),
+                          borderColor: "#1967d2",
+                          backgroundColor: "rgba(25,103,210,0.08)",
+                          fill: true,
+                          tension: 0.3,
+                          pointRadius: 0,
+                          borderWidth: 1.5,
+                        }],
+                      },
+                      options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                          x: { ticks: { font: { size: 8 }, maxTicksLimit: 5 }, grid: { display: false } },
+                          y: { beginAtZero: true, ticks: { font: { size: 8 } }, grid: { color: "rgba(0,0,0,0.04)" } },
+                        },
+                      },
+                    });
+                  }
+                }
+              }, 150);
+            })
+            .catch(() => {
+              histBox.innerHTML = `<div class="muted" style="font-size:0.85rem;">Historical data tidak tersedia (Prometheus/cAdvisor not ready).</div>`;
+            });
         }).catch(() => {
           metricsBox.innerHTML = `<div class="muted" style="font-size:0.85rem;">Metrics tidak tersedia.</div>`;
         });

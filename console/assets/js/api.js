@@ -165,6 +165,23 @@ export const monitorApi = {
   health: () => request("/health", { auth: false }),
   host: () => request("/monitoring/host"),
   summary: () => request("/monitoring/summary"),
+  // User-facing instance monitoring
+  instanceMetrics: (id) => request(`/monitoring/instances/${id}/metrics`),
+  instanceMetricsRange: (id, start = "now-1h", end = "now", step = "15s") => {
+    const params = new URLSearchParams();
+    if (start) params.set("start", start);
+    if (end) params.set("end", end);
+    if (step) params.set("step", step);
+    return request(`/monitoring/instances/${id}/metrics/range?${params.toString()}`);
+  },
+  instanceLogs: (id, { since, until, search, limit = 100 } = {}) => {
+    const params = new URLSearchParams();
+    if (since) params.set("since", since);
+    if (until) params.set("until", until);
+    if (search) params.set("search", search);
+    params.set("limit", String(limit));
+    return request(`/monitoring/instances/${id}/logs?${params.toString()}`);
+  },
 };
 
 export const catalogApi = {

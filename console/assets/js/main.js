@@ -170,10 +170,12 @@ async function bootstrapApp() {
     });
   }
 
+  // Monitoring nav is visible to all users (per-instance metrics + logs)
   const monitoringNav = elements.navItems.find((item) => item.dataset.view === "monitoring");
   if (monitoringNav) {
-    monitoringNav.classList.toggle("hidden", !me.is_admin);
+    monitoringNav.classList.toggle("hidden", false);
   }
+  // Grafana and MinIO Console buttons remain admin-only
   elements.monitorBtn.classList.toggle("hidden", !me.is_admin);
   elements.storageBtn.classList.toggle("hidden", !me.is_admin);
 

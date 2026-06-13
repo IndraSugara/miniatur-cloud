@@ -15,12 +15,32 @@ scrape_configs:
         refresh_interval: 10s
     relabel_configs:
       - source_labels: ['__meta_docker_container_name']
-        regex: '/iaas-.*'
-        action: drop
-      - source_labels: ['__meta_docker_container_name']
         target_label: container
         regex: '/?(.*)'
       - source_labels: ['__meta_docker_container_log_stream']
         target_label: stream
       - source_labels: ['__meta_docker_network_name']
         target_label: network
+      # Extract IaaS labels for user-scoped log queries
+      - source_labels: ['__meta_docker_container_label_iaas_owner_id']
+        target_label: owner_id
+        regex: '(.+)'
+      - source_labels: ['__meta_docker_container_label_iaas_instance_id']
+        target_label: instance_id
+        regex: '(.+)'
+      - source_labels: ['__meta_docker_container_label_iaas_name']
+        target_label: instance_name
+        regex: '(.+)'
+      - source_labels: ['__meta_docker_container_label_iaas_type']
+        target_label: iaas_type
+        regex: '(.+)'
+      - source_labels: ['__meta_docker_container_label_iaas_rds_id']
+        target_label: rds_id
+        regex: '(.+)'
+      - source_labels: ['__meta_docker_container_label_iaas_db_name']
+        target_label: db_name
+        regex: '(.+)'
+      # Drop infrastructure containers only (keep user instances)
+      - source_labels: ['__meta_docker_container_name']
+        regex: '/cloud-gateway|cloud-promtail|cloud-cadvisor|cloud-logs|cloud-metrics|cloud-dashboard|cloud-db|cloud-cache|cloud-storage|cloud-sshpiper|iaas-api|node-exporter|postgres-exporter'
+        action: drop

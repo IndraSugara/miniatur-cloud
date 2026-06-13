@@ -58,4 +58,5 @@ jobs:
             && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^docker-compose\.yml$'; then docker compose up -d; fi \
             && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^iaas-api/'; then docker compose build iaas-api && docker compose up -d iaas-api; fi \
             && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^(console/|nginx/)'; then docker exec cloud-gateway nginx -s reload; fi \
+            && if printf '%s\n' \"\$CHANGED_FILES\" | grep -qE '^(prometheus/|promtail/)'; then docker compose up -d prometheus promtail; fi \
             && echo '--- DEPLOY BERHASIL ---'"

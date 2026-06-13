@@ -181,6 +181,7 @@ class ComputeEngine:
                     "iaas.instance_id": iid,
                     "iaas.owner_id"   : owner_id,
                     "iaas.name"       : name,
+                    "iaas.type"       : "instance",
                     "iaas.gpu"        : gpu_label,
                     **({f"iaas.ssh_port": str(ssh_port)} if ssh_port else {}),
                 },
