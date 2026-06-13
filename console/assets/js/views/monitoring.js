@@ -48,19 +48,22 @@ export const monitoringView = {
         </div>
       </section>
 
-      <!-- Admin: Grafana -->
+      <!-- Admin: Grafana Embedded Dashboard -->
       <section class="panel">
         <div class="panel-header">
-          <h3>Grafana Dashboard</h3>
-          <button id="open-grafana-tab" class="btn btn-inline btn-ghost">Open in New Tab &nearr;</button>
+          <h3>Host Dashboards</h3>
+          <div style="display:flex;gap:8px;">
+            <button id="grafana-refresh-btn" class="btn btn-inline btn-ghost">&circlearrowright; Refresh</button>
+            <button id="open-grafana-tab" class="btn btn-inline btn-ghost">Open Grafana &nearr;</button>
+          </div>
         </div>
         <div style="border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);">
-          <iframe id="grafana-frame" src="/monitor/"
-            style="width:100%;height:400px;border:none;background:var(--bg-surface);"
+          <iframe id="grafana-frame" src="/monitor/d/node-metrics?kiosk&theme=light&refresh=30s"
+            style="width:100%;height:520px;border:none;background:var(--bg-surface);"
             loading="lazy"></iframe>
         </div>
-        <p class="muted" style="margin-top:8px;font-size:12px;">
-          Jika Grafana tidak muncul, pastikan container cloud-dashboard berjalan. Login default: admin / admin
+        <p class="muted" style="margin-top:8px;font-size:11px;">
+          Panels: CPU Usage • Memory Usage • Load Average • Disk Usage • Network Traffic. Open full Grafana for custom queries and log exploration.
         </p>
       </section>
       ` : ""}
@@ -183,7 +186,11 @@ export const monitoringView = {
       hostTimer = window.setInterval(loadHost, REFRESH_MS);
 
       root.querySelector("#open-grafana-tab")?.addEventListener("click", () => {
-        window.open("/monitor/", "_blank", "noopener");
+        window.open("/monitor/d/node-metrics?refresh=30s", "_blank", "noopener");
+      });
+      root.querySelector("#grafana-refresh-btn")?.addEventListener("click", () => {
+        const frame = root.querySelector("#grafana-frame");
+        if (frame) frame.src = frame.src;
       });
     }
 
