@@ -68,20 +68,28 @@ async def query_prometheus(
     query: str,
     time_range: Optional[tuple] = None,
 ) -> dict:
-    """Execute a Prometheus instant or range query."""
-    async with AsyncClient(base_url=PROMETHEUS_URL, timeout=10.0) as client:
-        if time_range:
-            start, end, step = time_range
-            params = {"query": query, "start": start, "end": end, "step": step}
-            resp = await client.get("/api/v1/query_range", params=params)
-        else:
-            params = {"query": query}
-            resp = await client.get("/api/v1/query", params=params)
-        resp.raise_for_status()
-        data = resp.json()
-        if data.get("status") != "success":
-            log.warning("Prometheus query warning: %s", data.get("error", "unknown"))
-        return data
+    """Execute a Prometheus instant or range query.
+
+    Returns ``{"status": "success", "data": {"result": []}}`` on connection
+    errors so callers always receive a well-formed payload.
+    """
+    try:
+        async with AsyncClient(base_url=PROMETHEUS_URL, timeout=10.0) as client:
+            if time_range:
+                start, end, step = time_range
+                params = {"query": query, "start": start, "end": end, "step": step}
+                resp = await client.get("/api/v1/query_range", params=params)
+            else:
+                params = {"query": query}
+                resp = await client.get("/api/v1/query", params=params)
+            resp.raise_for_status()
+            data = resp.json()
+            if data.get("status") != "success":
+                log.warning("Prometheus query warning: %s", data.get("error", "unknown"))
+            return data
+    except Exception as exc:
+        log.warning("Prometheus query failed (%s): %s", type(exc).__name__, exc)
+        return {"status": "error", "error": str(exc), "data": {"result": []}}
 
 
 async def query_loki(
@@ -90,18 +98,25 @@ async def query_loki(
     end_ns: int,
     limit: int = 100,
 ) -> dict:
-    """Execute a Loki range query."""
-    async with AsyncClient(base_url=LOKI_URL, timeout=10.0) as client:
-        params = {
-            "query": logql,
-            "start": start_ns,
-            "end": end_ns,
-            "limit": limit,
-            "direction": "backward",
-        }
-        resp = await client.get("/loki/api/v1/query_range", params=params)
-        resp.raise_for_status()
-        return resp.json()
+    """Execute a Loki range query.
+
+    Returns ``{"data": {"result": []}}`` on connection errors.
+    """
+    try:
+        async with AsyncClient(base_url=LOKI_URL, timeout=10.0) as client:
+            params = {
+                "query": logql,
+                "start": start_ns,
+                "end": end_ns,
+                "limit": limit,
+                "direction": "backward",
+            }
+            resp = await client.get("/loki/api/v1/query_range", params=params)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as exc:
+        log.warning("Loki query failed (%s): %s", type(exc).__name__, exc)
+        return {"data": {"result": []}}
 
 
 # ── Loki LogQL builder ────────────────────────────────────────
