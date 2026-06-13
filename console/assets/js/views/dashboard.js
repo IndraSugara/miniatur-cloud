@@ -69,6 +69,33 @@ export const dashboardView = {
         </div>
       </div>
 
+      ${state.user?.is_admin ? `
+      <section class="panel" id="dashboard-grafana-panel">
+        <div class="panel-header">
+          <h3>Host Dashboards</h3>
+          <button id="dash-grafana-open" class="btn btn-inline btn-ghost">Open Grafana &nearr;</button>
+        </div>
+        <div style="border-radius:var(--radius-sm);overflow:hidden;border:1px solid var(--border);">
+          <iframe id="dash-grafana-frame" src="/monitor/d/node-metrics?kiosk&theme=light&refresh=30s"
+            style="width:100%;height:380px;border:none;background:var(--bg-surface);"
+            loading="lazy"></iframe>
+        </div>
+        <p class="muted" style="margin-top:6px;font-size:11px;">
+          CPU • Memory • Load • Disk • Network — auto-refresh 30s
+        </p>
+      </section>
+      ` : ""}
+
+      <section class="panel" id="instance-metrics-panel">
+        <div class="panel-header">
+          <h3>Running Instances</h3>
+          <button class="btn btn-inline btn-ghost" data-nav="monitoring">Full Monitoring →</button>
+        </div>
+        <div id="instance-metrics-content">
+          <span class="dim"><span class="spinner"></span> Loading metrics...</span>
+        </div>
+      </section>
+
       <div class="grid grid-2">
         <section class="panel" id="workspaces-panel">
           <div class="panel-header">
@@ -115,6 +142,11 @@ export const dashboardView = {
       button.addEventListener("click", () => navigate(button.dataset.nav));
     });
 
+    // Grafana panel (admin-only)
+    root.querySelector("#dash-grafana-open")?.addEventListener("click", () => {
+      window.open("/monitor/d/node-metrics?refresh=30s", "_blank", "noopener");
+    });
+
     const cpuEl = root.querySelector("#m-cpu");
     const memEl = root.querySelector("#m-mem");
     const memSubEl = root.querySelector("#m-mem-sub");
@@ -127,6 +159,8 @@ export const dashboardView = {
     const pMem = root.querySelector("#p-mem");
     const pDisk = root.querySelector("#p-disk");
     const recentPanel = root.querySelector("#recent-panel");
+    const instanceMetricsPanel = root.querySelector("#instance-metrics-panel");
+    const instanceMetricsContent = root.querySelector("#instance-metrics-content");
 
     // Stat card elements
     const sInstances = root.querySelector("#s-instances");
@@ -141,6 +175,75 @@ export const dashboardView = {
       if (!networkId) return "-";
       const net = networks.find((n) => n.id === networkId);
       return net ? net.name : networkId.slice(0, 8) + "…";
+    }
+
+    async function renderInstanceMetrics(running) {
+      if (running.length === 0) {
+        instanceMetricsContent.innerHTML = `
+          <div class="empty-state" style="padding:14px 0;">
+            <p class="muted">Tidak ada instance running${activeWs ? " di workspace ini" : ""}.</p>
+          </div>`;
+        return;
+      }
+
+      // Fetch live metrics for all running instances in parallel
+      const withMetrics = await Promise.all(
+        running.map(async (inst) => {
+          try {
+            // Try Prometheus/cAdvisor first (richer data)
+            const m = await apis.monitor.instanceMetrics(inst.id);
+            if (m.metrics?.cpu_percent != null) {
+              return { ...inst, cpu: m.metrics.cpu_percent, mem: m.metrics.memory_mb, memLimit: inst.memory_mb, netRx: m.metrics.network_rx_bytes_sec };
+            }
+          } catch {
+            // Fallback to Docker stats
+          }
+          try {
+            const s = await apis.compute.getInstanceStatus(inst.id);
+            return { ...inst, cpu: s.cpu_percent, mem: s.mem_usage_mb, memLimit: s.mem_limit_mb || inst.memory_mb };
+          } catch {
+            return { ...inst, cpu: null, mem: null, memLimit: inst.memory_mb };
+          }
+        })
+      );
+
+      instanceMetricsContent.innerHTML = withMetrics
+        .map((inst) => {
+          const cpu = inst.cpu != null ? Number(inst.cpu) : null;
+          const mem = inst.mem != null ? Number(inst.mem) : null;
+          const memLimit = inst.memLimit || 256;
+          const memPct = mem != null ? (mem / memLimit) * 100 : 0;
+          const cpuClamped = clampPercent(cpu || 0);
+          const memClamped = clampPercent(memPct || 0);
+
+          return `
+            <div style="display:flex;align-items:center;gap:14px;padding:8px 0;border-bottom:1px solid var(--border-subtle);">
+              <div style="min-width:120px;">
+                <strong style="font-size:13px;">${escapeHtml(inst.name)}</strong>
+                <div class="muted" style="font-size:10px;">${escapeHtml(inst.instance_type)}</div>
+              </div>
+              <div style="flex:1;min-width:100px;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;">
+                  <span>CPU</span>
+                  <span class="mono">${cpu != null ? cpu.toFixed(1) + "%" : "N/A"}</span>
+                </div>
+                <div class="progress${cpuClamped > 80 ? " danger" : cpuClamped > 60 ? " warn" : ""}" style="height:5px;">
+                  <span style="width:${cpuClamped}%;height:5px;"></span>
+                </div>
+              </div>
+              <div style="flex:1;min-width:100px;">
+                <div style="display:flex;justify-content:space-between;font-size:11px;">
+                  <span>Memory</span>
+                  <span class="mono">${mem != null ? mem.toFixed(0) + " / " + memLimit + " MB" : "N/A"}</span>
+                </div>
+                <div class="progress${memClamped > 80 ? " danger" : memClamped > 60 ? " warn" : ""}" style="height:5px;">
+                  <span style="width:${memClamped}%;height:5px;"></span>
+                </div>
+              </div>
+              <button class="btn btn-inline btn-sm" data-nav="monitoring" style="white-space:nowrap;">Charts & Logs →</button>
+            </div>`;
+        })
+        .join("");
     }
 
     async function load() {
@@ -220,6 +323,16 @@ export const dashboardView = {
       sBuckets.textContent = buckets.length;
       sNetworks.textContent = networks.filter((n) => !n.is_default).length;
       sNetworksDetail.textContent = `${networks.length} total (incl. default)`;
+
+      // ── Running Instance Metrics ──
+      const runningInstances = instances.filter((i) => i.status === "running");
+      if (activeWs) {
+        // When a workspace is selected, only show instances in that workspace
+        const wsRunning = runningInstances.filter((i) => i.network_id === activeWs);
+        renderInstanceMetrics(wsRunning);
+      } else {
+        renderInstanceMetrics(runningInstances);
+      }
 
       // ── Workspace panel ──
       if (activeWs) {
@@ -303,8 +416,11 @@ export const dashboardView = {
         recentPanel.querySelector("h3").textContent = "Recent Instances";
       }
 
-      // Re-bind data-nav buttons in workspace content
+      // Re-bind data-nav buttons in workspace + metrics content
       wsContent.querySelectorAll("[data-nav]").forEach((btn) => {
+        btn.addEventListener("click", () => navigate(btn.dataset.nav));
+      });
+      instanceMetricsContent.querySelectorAll("[data-nav]").forEach((btn) => {
         btn.addEventListener("click", () => navigate(btn.dataset.nav));
       });
 
