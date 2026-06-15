@@ -594,11 +594,6 @@ input::placeholder { color: var(--text-muted); }
   color: #ffffff;
 }
 
-.brand-sub {
-  font-size: 11px;
-  color: #879596;
-}
-
 /* Workspace selector in sidebar */
 .sidebar-workspace {
   padding: 12px 12px 8px;
