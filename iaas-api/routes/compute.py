@@ -90,6 +90,7 @@ def list_instances(user: User = Depends(get_current_user), db: Session = Depends
          "status_detail": i.status_detail,
          "error_message": i.error_message if i.status == InstanceStatus.ERROR else None,
          "image": i.image, "instance_type": i.instance_type,
+         "vcpu": i.vcpu, "memory_mb": i.memory_mb,
          "ip_address": i.ip_address, "ssh_port": i.ssh_port,
          "network_id": i.network_id,
          "security_group_id": i.security_group_id,
