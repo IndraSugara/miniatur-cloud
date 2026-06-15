@@ -191,14 +191,13 @@ body {
 .login-logo .logo-mark {
   width: 44px; height: 44px;
   border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  background: linear-gradient(135deg, #ff8c00, #e07800);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
   flex-shrink: 0;
-}
-
-.login-logo .logo-mark img {
-  width: 36px; height: 36px;
 }
 
 .login-title {
