@@ -191,13 +191,14 @@ body {
 .login-logo .logo-mark {
   width: 44px; height: 44px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #ff8c00, #e07800);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 18px;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.login-logo .logo-mark img {
+  width: 36px; height: 36px;
 }
 
 .login-title {
@@ -570,13 +571,14 @@ input::placeholder { color: var(--text-muted); }
 .brand-mark {
   width: 34px; height: 34px;
   border-radius: 8px;
-  background: linear-gradient(135deg, #ff8c00 0%, #e07800 100%);
-  display: grid;
-  place-items: center;
-  font-weight: 800;
-  font-size: 14px;
-  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
+}
+
+.brand-mark img {
+  width: 28px; height: 28px;
 }
 
 .brand-text {
